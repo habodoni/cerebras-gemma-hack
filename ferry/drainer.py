@@ -26,11 +26,13 @@ class BurstDrainer:
 
     async def run(self) -> None:
         while True:
-            if self.watcher.is_online():
+            if self.watcher.can_burst():
                 await self.drain_once()
             await asyncio.sleep(settings.drain_poll_interval)
 
     async def drain_once(self) -> int:
+        if not await self.watcher.can_burst_now():
+            return 0
         if not self.clients.has_cerebras_key:
             if not self._warned_no_key:
                 log.warning("Window is open but no CEREBRAS_API_KEYS set; tasks stay queued.")
@@ -48,10 +50,10 @@ class BurstDrainer:
 
     async def _handle(self, task: dict) -> None:
         # Respect a window that closed mid-drain: leave it queued for next time.
-        if not self.watcher.is_online():
+        if not self.watcher.can_burst():
             return
         async with self._sem:
-            if not self.watcher.is_online():
+            if not self.watcher.can_burst():
                 return
             await self._process(task)
 
@@ -61,17 +63,17 @@ class BurstDrainer:
         await db.mark_sending(tid)
         try:
             full = []
-            if task.get("agentic"):
-                async for kind, text in self.clients.cerebras_agent(messages):
-                    if kind == "status":
-                        await registry.push(tid, {"type": "status", "text": text})
-                    else:
-                        full.append(text)
-                        await registry.push(tid, {"type": "token", "text": text})
-            else:
-                async for delta in self.clients.cerebras_stream(messages):
-                    full.append(delta)
-                    await registry.push(tid, {"type": "token", "text": delta})
+            runner = (
+                self.clients.cerebras_multiverse
+                if _cloud_mode(task) == "multi_agent"
+                else self.clients.cerebras_agent
+            )
+            async for kind, text in runner(messages):
+                if kind == "status":
+                    await registry.push(tid, {"type": "status", "text": text})
+                else:
+                    full.append(text)
+                    await registry.push(tid, {"type": "token", "text": text})
             answer = "".join(full)
             await db.mark_done(tid, answer)
             await registry.push(tid, {"type": "done"})
@@ -81,3 +83,10 @@ class BurstDrainer:
             log.warning("Task %s failed (%s) -> %s", tid[:8], exc, outcome)
             if outcome == "error":
                 await registry.push(tid, {"type": "error", "text": str(exc)})
+
+
+def _cloud_mode(task: dict) -> str:
+    route = str(task.get("route") or "")
+    if route.startswith("multi_agent"):
+        return "multi_agent"
+    return "single_agent"

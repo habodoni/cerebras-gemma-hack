@@ -4,15 +4,16 @@
 
 You chat in Open WebUI as normal — but it's not talking to a model, it's talking
 to **Ferry**. Ferry answers easy prompts instantly with a local edge model
-(`gemma4:e2b` via Ollama), and queues the hard ones in an on-device backlog. The
+(`LiquidAI/lfm2.5-1.2b-instruct` via Ollama), and queues the hard ones in an on-device backlog. The
 moment a connection window opens — even a few seconds — Ferry fans the backlog
 out **in parallel** to `gemma-4-31b` on Cerebras and streams each answer back
 into the same chat bubble you were waiting on.
 
-It's **Gemma 4 end-to-end**: the edge variant offline, the 31B in the burst.
+It's **Liquid local + Gemma 4 cloud**: Liquid handles offline edge replies, and
+Gemma 4 handles cloud bursts with tools.
 
 ```
-Open WebUI ──► Ferry (FastAPI, OpenAI-compatible) ──► Ollama  gemma4:e2b   (offline)
+Open WebUI ──► Ferry (FastAPI, OpenAI-compatible) ──► Ollama  LiquidAI/lfm2.5-1.2b-instruct
                  │  router: local now vs queue
                  └─ SQLite backlog (FIFO) ──► Cerebras gemma-4-31b  (burst, parallel)
                        ▲ connectivity watcher    answers stream back into the bubble
@@ -32,7 +33,7 @@ Three native processes: Ollama, Ferry, Open WebUI.
 ```bash
 # 1. Local model
 brew install ollama && ollama serve &
-ollama pull gemma4:e2b
+ollama pull LiquidAI/lfm2.5-1.2b-instruct
 
 # 2. Config
 cp .env.example .env      # paste your CEREBRAS_API_KEYS (comma-separated)
@@ -48,6 +49,7 @@ pip install open-webui
 OPENAI_API_BASE_URL=http://localhost:8080/v1 \
 OPENAI_API_KEY=ferry \
 ENABLE_OLLAMA_API=false \
+ENABLE_EVALUATION_ARENA_MODELS=false \
 WEBUI_AUTH=false \
 open-webui serve --port 3000
 #    chat → http://localhost:3000  → pick the "ferry" model
@@ -61,7 +63,7 @@ WebUI still runs natively via pip, as above):
 ```bash
 cp .env.example .env        # add CEREBRAS_API_KEYS
 docker compose up --build
-docker compose exec ollama ollama pull gemma4:e2b
+docker compose exec ollama ollama pull LiquidAI/lfm2.5-1.2b-instruct
 ```
 On a Mac, prefer the fully-local path — Docker Ollama is CPU-only and slow.
 
@@ -76,9 +78,11 @@ On a Mac, prefer the fully-local path — Docker Ollama is CPU-only and slow.
 5. Close the window mid-drain to show leftovers ride the next window.
 
 ## Models exposed to Open WebUI
-- `ferry` — auto-routed (the real product)
-- `ferry-local` — force the local model (demo escape hatch)
-- `ferry-cloud` — force-queue for Cerebras (demo escape hatch)
+Open WebUI sees one model:
+- `ferry` — auto-routes internally between local Ollama and tool-enabled Gemma 4.
+
+For cloud-worthy prompts, Ferry automatically chooses a single Gemma 4 agent or
+parallel sub-agents with synthesis. The user never picks a route.
 
 ## API
 | Method | Path | Purpose |
@@ -94,9 +98,10 @@ On a Mac, prefer the fully-local path — Docker Ollama is CPU-only and slow.
 
 ## Build status
 - [x] OpenAI-compatible service + `/v1/models`, SSE streaming
-- [x] Local passthrough to Ollama (`gemma4:e2b`)
+- [x] Local passthrough to Ollama (`LiquidAI/lfm2.5-1.2b-instruct`)
 - [x] SQLite (WAL) FIFO backlog + automatic router
 - [x] Held-open placeholder → deliver-back into the same bubble
 - [x] Cerebras key-pool client, connectivity watcher, parallel burst drainer
 - [x] Demo toggles + backlog dashboard
-- [ ] Track 1 stretch: multimodal queued task + multi-agent decomposition
+- [x] Track 1 stretch: tool-enabled single-agent + multi-agent decomposition
+- [ ] Multimodal queued task

@@ -19,7 +19,8 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
@@ -87,7 +88,9 @@ async def list_models():
 async def chat_completions(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
-    model = body.get("model", "ferry")
+    # Ferry exposes one public model. Older clients may still send stale model
+    # ids; treat them as ferry so the user never has to pick a route.
+    model = "ferry"
     stream = bool(body.get("stream", False))
     conversation = body.get("conversation_id") or request.headers.get("x-conversation-id")
 
@@ -99,31 +102,7 @@ async def chat_completions(request: Request):
         content = await _safe_local_complete(clients, messages, model)
         return JSONResponse(sse.completion(model, content))
 
-    # Agentic model: web_search (Exa) + run_code (E2B) via Cerebras tool-calling.
-    if model == "ferry-agent":
-        if request.app.state.watcher.is_online():
-            return StreamingResponse(
-                _stream_agent(clients, messages, model),
-                media_type="text/event-stream",
-            )
-        tid = uuid.uuid4().hex
-        queue = registry.register(tid)
-        await db.enqueue(
-            messages, route="agent", source="chat",
-            conversation=conversation, task_id=tid, agentic=True,
-        )
-        return StreamingResponse(
-            _stream_queued(tid, queue, model),
-            media_type="text/event-stream",
-        )
-
-    # Decide the route (explicit model overrides win over the router).
-    if model == "ferry-local":
-        route, reason = "local", "model=ferry-local"
-    elif model == "ferry-cloud":
-        route, reason = "cloud", "model=ferry-cloud"
-    else:
-        route, reason = await router.decide(clients, messages)
+    route, reason = await router.decide(clients, messages)
     log.info("route=%s (%s)", route, reason)
 
     if route == "local":
@@ -132,12 +111,28 @@ async def chat_completions(request: Request):
             media_type="text/event-stream",
         )
 
+    cloud_mode, cloud_reason = await router.decide_cloud_mode(clients, messages)
+    internal_route = f"{cloud_mode}: {cloud_reason}"
+    log.info("cloud_mode=%s (%s)", cloud_mode, cloud_reason)
+
+    watcher: ConnectivityWatcher = request.app.state.watcher
+    if await watcher.can_burst_now():
+        return StreamingResponse(
+            _stream_agentic(clients, messages, model, cloud_mode),
+            media_type="text/event-stream",
+        )
+
     # Cloud path: register the live queue BEFORE enqueue so the drainer can't
     # race ahead of us, then hold the SSE stream open.
     tid = uuid.uuid4().hex
     queue = registry.register(tid)
     await db.enqueue(
-        messages, route=reason, source="chat", conversation=conversation, task_id=tid
+        messages,
+        route=internal_route,
+        source="chat",
+        conversation=conversation,
+        task_id=tid,
+        agentic=True,
     )
     return StreamingResponse(
         _stream_queued(tid, queue, model),
@@ -150,6 +145,16 @@ async def _stream_local(clients: Clients, messages: list[dict], model: str):
     try:
         async for delta in clients.ollama_stream(messages, settings.local_model):
             yield sse.chunk(model, {"content": delta})
+    except httpx.TimeoutException:
+        yield sse.chunk(
+            model,
+            {
+                "content": (
+                    "\n\n[local model timed out after "
+                    f"{settings.local_timeout_seconds:g}s]"
+                )
+            },
+        )
     except Exception as exc:  # noqa: BLE001
         yield sse.chunk(model, {"content": f"\n\n[local model error: {exc}]"})
     yield sse.chunk(model, {}, finish_reason="stop")
@@ -190,11 +195,24 @@ async def _stream_queued(tid: str, queue: asyncio.Queue, model: str):
         registry.unregister(tid)
 
 
-async def _stream_agent(clients: Clients, messages: list[dict], model: str):
-    """Run the agentic tool-loop inline (online) and stream steps + answer."""
+async def _stream_agentic(
+    clients: Clients, messages: list[dict], model: str, cloud_mode: str
+):
+    """Run an agentic Cerebras path inline (online) and stream steps + answer."""
     yield sse.chunk(model, {"role": "assistant"})
+    label = (
+        "Gemma 4 multi-agent fan-out"
+        if cloud_mode == "multi_agent"
+        else "Gemma 4 agent with tools"
+    )
+    yield sse.chunk(model, {"content": f"\n_{label}_\n\n"})
     try:
-        async for kind, text in clients.cerebras_agent(messages):
+        runner = (
+            clients.cerebras_multiverse
+            if cloud_mode == "multi_agent"
+            else clients.cerebras_agent
+        )
+        async for kind, text in runner(messages):
             if kind == "status":
                 yield sse.chunk(model, {"content": f"\n_{text}_\n\n"})
             else:
@@ -208,6 +226,8 @@ async def _stream_agent(clients: Clients, messages: list[dict], model: str):
 async def _safe_local_complete(clients: Clients, messages: list[dict], model: str) -> str:
     try:
         return await clients.ollama_complete(messages, settings.local_model)
+    except httpx.TimeoutException:
+        return f"[local model timed out after {settings.local_timeout_seconds:g}s]"
     except Exception as exc:  # noqa: BLE001
         return f"[local model unavailable: {exc}]"
 
@@ -220,6 +240,7 @@ async def status(request: Request):
     watcher: ConnectivityWatcher = request.app.state.watcher
     return {
         "online": watcher.is_online(),
+        "can_burst": watcher.can_burst(),
         "override": watcher.override,
         "real_reachable": watcher.real_reachable,
         "counts": await db.counts(),
@@ -233,6 +254,14 @@ async def status(request: Request):
 @app.get("/api/tasks")
 async def tasks(limit: int = 200):
     return await db.list_tasks(limit=limit)
+
+
+@app.get("/api/files/{run_id}/{file_path:path}")
+async def generated_file(run_id: str, file_path: str):
+    target = _generated_file_path(run_id, file_path)
+    if target is None:
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(target, filename=target.name)
 
 
 @app.post("/demo/online/{state}")
@@ -256,9 +285,10 @@ async def demo_seed(request: Request, count: int = 100):
         prompt = f"{tpl['prompt']} (#{i + 1})" if count > len(templates) else tpl["prompt"]
         await db.enqueue(
             [{"role": "user", "content": prompt}],
-            route="seed",
+            route="single_agent: seed",
             source="seed",
             priority=tpl.get("priority", 5),
+            agentic=True,
         )
         seeded += 1
     return {"seeded": seeded, "counts": await db.counts()}
@@ -303,3 +333,18 @@ async def health():
 @app.get("/")
 async def root():
     return RedirectResponse("/dashboard")
+
+
+def _generated_file_path(run_id: str, file_path: str) -> Path | None:
+    if not (8 <= len(run_id) <= 64 and all(c in "0123456789abcdef" for c in run_id)):
+        return None
+    base = Path(settings.generated_files_dir).resolve()
+    run_dir = (base / run_id).resolve()
+    target = (run_dir / file_path).resolve()
+    try:
+        target.relative_to(run_dir)
+    except ValueError:
+        return None
+    if not target.is_file():
+        return None
+    return target

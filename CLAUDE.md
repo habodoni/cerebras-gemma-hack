@@ -19,10 +19,10 @@ you're working on.
 | **Owner** | Mac-side teammate | Ethan |
 | **Purpose** | wifi-flicker laptop demo **+ Ferry app development** | the real product: edge hub, weak client connects over a hotspot |
 | **Runs on** | a MacBook | Jetson Orin Nano (`ethan@ethan-desktop`, Ubuntu 22.04, JetPack 6, Python 3.10) |
-| **Local model** | `gemma4:e2b` (Ollama) | `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` — "Liquid" (Ollama) |
+| **Local model** | `LiquidAI/lfm2.5-1.2b-instruct` (Ollama) | `LiquidAI/lfm2.5-1.2b-instruct` — "Liquid" (Ollama) |
 | **Ferry** | `uvicorn` native | **systemd** `ferry.service` |
 | **Open WebUI** | native (pip), `--port 3000` | **Docker** container `open-webui`, `:3000` |
-| **Cloud model** | `gemma-4-31b` on Cerebras (`gpt-oss-120b` fallback) | same |
+| **Cloud model** | `gemma-4-31b` on Cerebras | same |
 | **"Window" control** | toggle Mac wifi, or `/demo/online` | `/demo/online` toggle (ethernet uplink later) |
 | **Config template** | `.env.example` | `.env.jetson.example` |
 | **Status** | built + verified on Mac | **deployed + verified live on the Jetson** |
@@ -50,20 +50,20 @@ before touching shared code.
 
 ## Models & ports
 - **Ports:** Ferry `8080` · Open WebUI `3000` · Ollama `11434`
-- **Ferry exposes 4 models:** `ferry` (auto-route), `ferry-local` (force local),
-  `ferry-cloud` (force queue→burst), `ferry-agent` (Cerebras tool-calling with
-  `web_search` via Exa + `run_code`/file-creation via E2B — see `ferry/tools.py`)
-- **Cloud:** `gemma-4-31b` on Cerebras — the prize model, live and verified (~0.2s answers,
-  clean tool-calling). Needs Gemma 4 preview access on the key; `gpt-oss-120b` is the fallback.
+- **Ferry exposes 1 model:** `ferry`. It routes internally to local Ollama,
+  a tool-enabled Gemma 4 agent, or multi-agent Gemma 4 fan-out + synthesis.
+  Tools are `web_search` via Exa and `run_code`/file creation via E2B.
+- **Cloud:** `gemma-4-31b` on Cerebras. Keys need Gemma 4 preview access; set
+  `CEREBRAS_MODEL=gpt-oss-120b` manually only if a key lacks that access.
 
 ## Run it (Mac)
 ```bash
 ollama serve &
-ollama pull gemma4:e2b          # if unavailable, use a small model + set LOCAL_MODEL
+ollama pull LiquidAI/lfm2.5-1.2b-instruct
 cp .env.example .env            # add CEREBRAS_API_KEYS (+ EXA_API_KEY for Track 1)
 python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 uvicorn ferry.main:app --port 8080
-# Open WebUI (native, Python 3.11, own venv): open-webui serve --port 3000 → http://localhost:8080/v1
+# Open WebUI (native, Python 3.11, own venv): set OPENAI_API_BASE_URL=http://localhost:8080/v1 and ENABLE_EVALUATION_ARENA_MODELS=false, then open-webui serve --port 3000
 ```
 Full Mac steps in `HANDOFF.md`. Jetson runs as services — see `JETSON_STARTUP.md`.
 

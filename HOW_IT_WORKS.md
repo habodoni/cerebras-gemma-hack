@@ -37,7 +37,7 @@ Two things make Ferry's approach work:
    ┌───────────────────────────────────────────────────────────────────────┐
    │                                                                         │
    │   Open WebUI  ──►  Ferry (FastAPI, OpenAI-compatible)  ──►  Ollama      │
-   │   (browser)        • router: answer local vs queue          gemma4:e2b  │
+   │   (browser)        • router: answer local vs queue          LiquidAI    │
    │       ▲            • /v1/chat/completions (SSE)              (on-device) │
    │       │            • connectivity watcher                               │
    │       │            • burst drainer                                      │
@@ -57,8 +57,8 @@ Everything speaks the **OpenAI Chat Completions API**, so a single code path tal
 to both the local model and the cloud model, and Open WebUI treats Ferry as if it
 were just a normal model endpoint. No custom Open WebUI plugin is required.
 
-It's **Gemma 4 end-to-end**: the `gemma4:e2b` edge variant offline, and
-`gemma-4-31b` in the burst.
+It's **Liquid local + Gemma 4 cloud**: `LiquidAI/lfm2.5-1.2b-instruct` offline,
+and `gemma-4-31b` in the burst.
 
 ---
 
@@ -69,7 +69,7 @@ It's **Gemma 4 end-to-end**: the `gemma4:e2b` edge variant offline, and
 ```
 User → Open WebUI → POST /v1/chat/completions (stream)
      → Ferry router decides "local"
-     → Ferry streams tokens from Ollama (gemma4:e2b)
+     → Ferry streams tokens from Ollama (LiquidAI/lfm2.5-1.2b-instruct)
      → tokens flow straight back to the bubble.   No network needed.
 ```
 
@@ -149,8 +149,10 @@ flips a toggle. Modes (`ROUTER_MODE`):
   back to the heuristic if it stalls.
 - **`always_cloud` / `always_local`** — force a route (handy for demos).
 
-Two escape-hatch models are also exposed so a presenter can force a path:
-`ferry-local` and `ferry-cloud` (alongside the real auto-routing `ferry`).
+Open WebUI sees one model: `ferry`. Ferry decides the route internally so the
+user never chooses local/cloud/agent mode. Cloud-worthy prompts always go to
+Gemma 4 with tools available; Ferry chooses either one agent or parallel
+sub-agents plus synthesis.
 
 > Non-streaming requests (Open WebUI's background title/tag generation) are always
 > answered locally, so utility calls never pollute the backlog.
@@ -243,7 +245,7 @@ replay complete multi-turn context to Cerebras.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/v1/chat/completions` | OpenAI-compatible chat (triage + SSE streaming) |
-| GET | `/v1/models` | lists `ferry`, `ferry-local`, `ferry-cloud` |
+| GET | `/v1/models` | lists `ferry` |
 | GET | `/api/status` | window state + backlog counts (dashboard/demo poll this) |
 | GET | `/api/tasks` | the backlog |
 | POST | `/demo/online/{true\|false\|auto}` | force / release the connection window |
@@ -272,31 +274,29 @@ replay complete multi-turn context to Cerebras.
 
 | Role | Model | Where |
 |---|---|---|
-| On-device (offline brain) | `gemma4:e2b` | Ollama, OpenAI-compatible at `localhost:11434/v1` |
+| On-device (offline brain) | `LiquidAI/lfm2.5-1.2b-instruct` | Ollama, OpenAI-compatible at `localhost:11434/v1` |
 | Cloud (burst brain) | `gemma-4-31b` | Cerebras, `https://api.cerebras.ai/v1` |
-| Dev fallback | `gpt-oss-120b` | Cerebras (used until Gemma 4 preview opens) |
 
 Configuration is environment-driven ([.env.example](.env.example)). Key settings:
 `CEREBRAS_API_KEYS` (comma-separated pool), `CEREBRAS_MODEL`, `LOCAL_MODEL`,
 `ROUTER_MODE`, `WATCHER_INTERVAL`, `DRAIN_CONCURRENCY`, `MAX_ATTEMPTS`, `DB_PATH`.
 
-> `gemma-4-31b` is private-preview during the hackathon; until it opens, the dev
-> config points `CEREBRAS_MODEL` at `gpt-oss-120b`. The code is model-agnostic, so
-> switching back is a one-line `.env` change.
+> Keep `CEREBRAS_MODEL=gemma-4-31b`; every cloud burst uses Gemma 4 with tools
+> available.
 
 ---
 
 ## 10. Verified behaviour
 
-Measured locally against Cerebras (with the dev fallback model):
+Measured locally against Cerebras:
 
 - **Single call:** full answer in **~0.22s** (time-to-first-token ≈ total).
 - **Parallel backlog burst:** **8 queued tasks drained in ~0.9s** of inference,
   0 errors, all delivered with real answers.
 - **Held-open bubble:** a single chat bubble showed the placeholder, then the
   Cerebras answer streamed into the *same* response — the demo's signature moment.
-- **Local path:** `gemma4:e2b` generates on-device (≈8s cold load of the 7.2 GB
-  model, then fast — warm it once before a demo).
+- **Local path:** `LiquidAI/lfm2.5-1.2b-instruct` generates on-device (small enough
+  for responsive local demos — warm it once before recording).
 
 ---
 
@@ -319,7 +319,7 @@ Measured locally against Cerebras (with the dev fallback model):
 Fully local, no Docker (see [README.md](README.md) for full setup):
 
 ```bash
-ollama serve & ollama pull gemma4:e2b          # on-device brain
+ollama serve & ollama pull LiquidAI/lfm2.5-1.2b-instruct
 cp .env.example .env                            # add CEREBRAS_API_KEYS
 uvicorn ferry.main:app --port 8080              # Ferry
 open-webui serve --port 3000                    # chat UI, pointed at :8080/v1

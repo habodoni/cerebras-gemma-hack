@@ -11,6 +11,8 @@ data/
 __pycache__/
 *.py[cod]
 .venv/
+.venv-webui/
+.webui_secret_key
 venv/
 *.egg-info/
 

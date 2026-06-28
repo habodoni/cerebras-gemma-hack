@@ -58,13 +58,6 @@
     display:flex; align-items:center; gap:8px; font-weight:600; }
   .card h2 .count { color:var(--muted); font-weight:450; font-size:12px; }
 
-  /* Segmented control */
-  .seg { display:inline-flex; padding:3px; gap:2px; background:var(--subtle); border:1px solid var(--border);
-    border-radius:10px; margin:14px 16px 0; align-self:flex-start; }
-  .seg button { border:0; background:transparent; color:var(--muted); padding:6px 12px; border-radius:7px;
-    font-size:12.5px; cursor:pointer; font-weight:520; }
-  .seg button[aria-selected="true"] { background:#fff; color:var(--fg); box-shadow:0 1px 2px rgba(0,0,0,.06); }
-
   /* Chat */
   .chat { display:flex; flex-direction:column; height:560px; }
   .msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px; }
@@ -146,11 +139,6 @@
   <div class="grid">
     <!-- Chat -->
     <div class="card">
-      <div class="seg" id="seg">
-        <button data-model="ferry" aria-selected="true">Auto</button>
-        <button data-model="ferry-local" aria-selected="false">On-device</button>
-        <button data-model="ferry-cloud" aria-selected="false">Cloud</button>
-      </div>
       <div class="chat">
         <div class="msgs" id="msgs">
           <div class="empty" id="empty">
@@ -190,14 +178,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const PLACEHOLDER_MARK = "⏳";
-let model = "ferry";
-
-// --- segmented control ---
-$("seg").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  [...$("seg").children].forEach(x => x.setAttribute("aria-selected", x === b));
-  model = b.dataset.model;
-});
+const AGENT_STATUS_MARK = "\n_";
+const model = "ferry";
 
 // --- connection switch ---
 $("connSwitch").addEventListener("click", async () => {
@@ -244,10 +226,13 @@ async function send(){
       content += delta;
       if (!tagged) {
         tagged = true;
-        const cloud = content.startsWith(PLACEHOLDER_MARK);
-        meta.innerHTML = cloud
+        const queued = content.startsWith(PLACEHOLDER_MARK);
+        const cloud = queued || content.startsWith(AGENT_STATUS_MARK);
+        meta.innerHTML = queued
           ? '<span class="tag cloud">queued → Cerebras</span><span class="dots">waiting for window</span>'
-          : '<span class="tag">on-device · gemma4:e2b</span>';
+          : cloud
+            ? '<span class="tag cloud">Gemma 4 · tools</span>'
+            : '<span class="tag">on-device · gemma4:e2b</span>';
       }
       // Once the real cloud answer starts arriving, drop the "waiting" hint.
       if (content.startsWith(PLACEHOLDER_MARK) && content.length > 140) {

@@ -100,7 +100,7 @@
       <div class="group">Setup</div>
       <ul>
         <li><input type="checkbox" id="m1"><label for="m1"><span class="t">Onboard on the Mac</span><span class="n">Follow HANDOFF.md: clone, Python 3.10–3.12 venv, <code>ollama pull gemma4:e2b</code>, run <code>uvicorn ferry.main:app</code>.</span></label></li>
-        <li><input type="checkbox" id="m2"><label for="m2"><span class="t">Open WebUI (native, Python 3.11)</span><span class="n">Own venv, <code>open-webui serve --port 3000</code>, Admin → Connections → <code>http://localhost:8080/v1</code> (key <code>ferry</code>), Ollama off.</span></label></li>
+        <li><input type="checkbox" id="m2"><label for="m2"><span class="t">Open WebUI (native, Python 3.11)</span><span class="n">Own venv, run with <code>ENABLE_EVALUATION_ARENA_MODELS=false</code>, Admin → Connections → <code>http://localhost:8080/v1</code> (key <code>ferry</code>), Ollama off.</span></label></li>
         <li><input type="checkbox" id="m3"><label for="m3"><span class="t">Confirm both routes</span><span class="n">Short prompt → local <code>gemma4:e2b</code>; long/"analyze…" → queue → Cerebras burst in the same bubble.</span></label></li>
       </ul>
 
@@ -124,7 +124,7 @@
 
       <div class="group">Refresh the hub</div>
       <ul>
-        <li><input type="checkbox" id="j1"><label for="j1"><span class="t">Pull latest + enable ferry-agent</span><span class="n"><code>git pull && .venv/bin/pip install -r requirements.txt</code>, add <code>EXA_API_KEY</code> + <code>E2B_API_KEY</code> to <code>.env</code>, <code>sudo systemctl restart ferry</code>.</span></label></li>
+        <li><input type="checkbox" id="j1"><label for="j1"><span class="t">Pull latest + enable tool routes</span><span class="n"><code>git pull && .venv/bin/pip install -r requirements.txt</code>, add <code>EXA_API_KEY</code> + <code>E2B_API_KEY</code> to <code>.env</code>, <code>sudo systemctl restart ferry</code>. Open WebUI should show only <code>ferry</code>.</span></label></li>
         <li><input type="checkbox" id="j2"><label for="j2"><span class="t">Verify reboot resilience</span><span class="n">Reboot once; confirm Ferry (systemd) + Ollama + Open WebUI (Docker) all come back automatically.</span></label></li>
       </ul>
 
@@ -148,7 +148,7 @@
         <div>
           <div class="group">Model &amp; keys</div>
           <ul>
-            <li><input type="checkbox" id="s1"><label for="s1"><span class="t">Flip to Gemma 4</span><span class="n">Currently on <code>gpt-oss-120b</code>. The prize requires Gemma 4 as the central model — set <code>CEREBRAS_MODEL=gemma-4-31b</code> the moment your key sees it, then restart. (Also cleans up agent output.)</span></label></li>
+            <li><input type="checkbox" id="s1"><label for="s1"><span class="t">Confirm Gemma 4</span><span class="n">Keep <code>CEREBRAS_MODEL=gemma-4-31b</code>. The prize requires Gemma 4 as the central model for every cloud burst.</span></label></li>
             <li><input type="checkbox" id="s2"><label for="s2"><span class="t">Add teammates' Cerebras keys</span><span class="n">Comma-separated in <code>CEREBRAS_API_KEYS</code> → wider parallel burst (past one key's 100 RPM).</span></label></li>
           </ul>
         </div>
@@ -171,7 +171,7 @@
       <li>Mac verified: 0.22s single call, 8 tasks burst in ~0.9s, held-open bubble</li>
       <li>Jetson hub LIVE: Ollama+Liquid, Ferry (systemd), Open WebUI (Docker) wired to Ferry — local + burst confirmed</li>
       <li>Handoff docs: CLAUDE.md, HANDOFF.md, JETSON_STARTUP.md, JETSON_DEPLOY.md (verified by adversarial review)</li>
-      <li>ferry-agent: Exa web_search + E2B run_code (code execution + file creation) — built, tested live, shipped</li>
+      <li>Single-model Ferry: automatic local vs Gemma 4 agent vs multi-agent routing, with Exa web_search + E2B run_code available to cloud routes</li>
     </ul>
     <p style="margin-top:14px;"><button class="reset" onclick="if(confirm('Clear all checkmarks?')){localStorage.clear();location.reload();}">Reset checklist</button></p>
   </details>

@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
+from pathlib import Path, PurePosixPath
+from urllib.parse import quote
 
 import httpx
 
@@ -47,8 +50,9 @@ TOOLS = [
             "description": (
                 "Execute Python 3 code in a secure cloud sandbox and return "
                 "stdout, stderr, return values, and any files it creates. Use this "
-                "to compute, analyze data, or generate files (write them to disk in "
-                "the code and they will be listed back)."
+                "to compute, analyze data, or generate files. Write generated files "
+                "to the current directory or /mnt/data; Ferry will return download "
+                "URLs for them."
             ),
             "parameters": {
                 "type": "object",
@@ -98,6 +102,8 @@ def _run_code_sync(code: str) -> str:
 
     sbx = Sandbox.create(api_key=settings.e2b_api_key)
     try:
+        _ensure_file_roots(sbx)
+        before = _sandbox_file_entries(sbx)
         execution = sbx.run_code(code)
         parts: list[str] = []
         logs = execution.logs
@@ -111,17 +117,15 @@ def _run_code_sync(code: str) -> str:
             text = getattr(res, "text", None)
             if text:
                 parts.append("result: " + text)
-        # Surface any files the code created in the working dir.
-        try:
-            entries = sbx.files.list("/home/user")
-            names = [
-                e.name for e in entries
-                if getattr(e, "type", "") != "dir" and not e.name.startswith(".")
-            ]
-            if names:
-                parts.append("files created: " + ", ".join(sorted(names)))
-        except Exception:  # noqa: BLE001 - file listing is best-effort
-            pass
+        files = _created_files(before, _sandbox_file_entries(sbx))
+        file_lines = _save_sandbox_files(sbx, files[:settings.e2b_max_files])
+        if file_lines:
+            parts.append("files created:\n" + "\n".join(file_lines))
+        if len(files) > settings.e2b_max_files:
+            parts.append(
+                f"files skipped: {len(files) - settings.e2b_max_files} "
+                f"extra file(s) beyond E2B_MAX_FILES={settings.e2b_max_files}"
+            )
         return "\n".join(parts) if parts else "(no output)"
     finally:
         sbx.kill()
@@ -132,6 +136,126 @@ async def run_code(code: str) -> str:
         return "[run_code unavailable: no E2B_API_KEY configured]"
     # The E2B SDK is sync; run it off the event loop.
     return await asyncio.to_thread(_run_code_sync, code)
+
+
+def _ensure_file_roots(sbx) -> None:
+    for root in settings.e2b_file_roots:
+        root = root.strip()
+        if not root or root == "/home/user":
+            continue
+        try:
+            sbx.files.make_dir(root)
+        except Exception:  # noqa: BLE001 - roots are best-effort convenience
+            pass
+
+
+def _sandbox_file_entries(sbx) -> dict[str, object]:
+    files = {}
+    for root in settings.e2b_file_roots:
+        root = root.strip()
+        if not root:
+            continue
+        try:
+            entries = sbx.files.list(root, depth=settings.e2b_file_list_depth)
+        except Exception:  # noqa: BLE001 - one missing root should not hide other roots
+            continue
+        for entry in entries:
+            if not _is_file_entry(entry):
+                continue
+            path = str(getattr(entry, "path", "") or "")
+            rel = _artifact_relpath(path)
+            if path and rel is not None:
+                files[path] = entry
+    return files
+
+
+def _created_files(before: dict[str, object], after: dict[str, object]) -> list[object]:
+    created = []
+    for path, entry in after.items():
+        previous = before.get(path)
+        if previous is None or _file_changed(previous, entry):
+            created.append(entry)
+    return sorted(created, key=lambda item: str(getattr(item, "path", "")))
+
+
+def _file_changed(before, after) -> bool:
+    before_size = getattr(before, "size", None)
+    after_size = getattr(after, "size", None)
+    before_modified = getattr(before, "modified_time", None)
+    after_modified = getattr(after, "modified_time", None)
+    return before_size != after_size or before_modified != after_modified
+
+
+def _is_file_entry(entry) -> bool:
+    kind = getattr(entry, "type", "")
+    value = str(getattr(kind, "value", kind)).lower()
+    name = str(getattr(entry, "name", "") or "")
+    return value == "file" and bool(name) and not name.startswith(".")
+
+
+def _artifact_relpath(path: str) -> str | None:
+    posix_path = PurePosixPath("/" + path.lstrip("/"))
+    for root in sorted(settings.e2b_file_roots, key=len, reverse=True):
+        root_path = PurePosixPath("/" + root.strip().lstrip("/"))
+        try:
+            rel = posix_path.relative_to(root_path)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if not parts or any(part in {"", ".", ".."} for part in parts):
+            return None
+        if any(part.startswith(".") for part in parts):
+            return None
+        return rel.as_posix()
+    return None
+
+
+def _save_sandbox_files(sbx, entries: list[object]) -> list[str]:
+    if not entries:
+        return []
+    run_id = uuid.uuid4().hex
+    run_dir = Path(settings.generated_files_dir).resolve() / run_id
+    lines = []
+    for entry in entries:
+        rel = _artifact_relpath(str(getattr(entry, "path", "") or ""))
+        if rel is None:
+            continue
+        size = int(getattr(entry, "size", 0) or 0)
+        if settings.e2b_max_file_bytes > 0 and size > settings.e2b_max_file_bytes:
+            lines.append(
+                f"- {rel}: skipped ({size} bytes exceeds "
+                f"E2B_MAX_FILE_BYTES={settings.e2b_max_file_bytes})"
+            )
+            continue
+        target = _artifact_target(run_dir, rel)
+        if target is None:
+            continue
+        try:
+            raw = sbx.files.read(getattr(entry, "path"), format="bytes")
+            if hasattr(raw, "read"):
+                raw = raw.read()
+            data = raw.encode() if isinstance(raw, str) else bytes(raw)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        except Exception as exc:  # noqa: BLE001 - report per-file export failures
+            lines.append(f"- {rel}: export failed ({exc})")
+            continue
+        url = _artifact_url(run_id, rel)
+        lines.append(f"- {rel} ({len(data)} bytes): {url}")
+    return lines
+
+
+def _artifact_target(run_dir: Path, rel: str) -> Path | None:
+    target = (run_dir / Path(*PurePosixPath(rel).parts)).resolve()
+    try:
+        target.relative_to(run_dir.resolve())
+    except ValueError:
+        return None
+    return target
+
+
+def _artifact_url(run_id: str, rel: str) -> str:
+    return f"{settings.public_base_url}/api/files/{run_id}/{quote(rel, safe='/')}"
 
 
 # ---- dispatch ----

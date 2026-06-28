@@ -7,7 +7,7 @@ deployed side. For first-time setup see `JETSON_DEPLOY.md`; for the project over
 ## The stack (all auto-start on boot)
 | Service | What | Managed by | Port |
 |---|---|---|---|
-| **Ollama** | serves Liquid `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` | systemd `ollama.service` | 11434 |
+| **Ollama** | serves Liquid `LiquidAI/lfm2.5-1.2b-instruct` | systemd `ollama.service` | 11434 |
 | **Ferry** | router + backlog + Cerebras burst | systemd `ferry.service` (enabled) | 8080 |
 | **Open WebUI** | the chat UI | Docker container `open-webui` (`--restart unless-stopped`) | 3000 |
 | **Tailscale** | remote access (`ethan-desktop.taile8145e.ts.net`, `100.72.28.10`) | systemd | serve :8443 |
@@ -50,12 +50,11 @@ docker logs -f open-webui           # Open WebUI logs
 ```bash
 cd ~/cerebras-gemma-hack && git pull && .venv/bin/pip install -r requirements.txt && sudo systemctl restart ferry
 ```
-> For the `ferry-agent` model (web_search + run_code), add `EXA_API_KEY` and
-> `E2B_API_KEY` to `.env` and restart.
-**Flip to Gemma 4** once your key has preview access (check with the model list below):
+> Ferry exposes one model, `ferry`; add `EXA_API_KEY` and `E2B_API_KEY` to
+> `.env` so the internal Gemma 4 agent routes can use tools.
+**Confirm Gemma 4 access** if needed:
 ```bash
 curl -s https://api.cerebras.ai/v1/models -H "Authorization: Bearer $(grep -m1 CEREBRAS_API_KEYS ~/cerebras-gemma-hack/.env | cut -d= -f2 | cut -d, -f1)" | tr ',' '\n' | grep '"id"'
-# if gemma-4-31b appears:
 cd ~/cerebras-gemma-hack && sed -i 's/^CEREBRAS_MODEL=.*/CEREBRAS_MODEL=gemma-4-31b/' .env && sudo systemctl restart ferry
 ```
 **Demo the connection window** (or use the dashboard buttons):

@@ -13,7 +13,7 @@ held-open SSE stream — no Open WebUI plugin needed). Full detail: `HOW_IT_WORK
 
 ## The split — your lane
 One codebase, two deployments (see the table in `CLAUDE.md`). You own:
-- **The Mac deployment** — the "wifi flicker on a laptop" demo, local model `gemma4:e2b`.
+- **The Mac deployment** — the "wifi flicker on a laptop" demo, local model `LiquidAI/lfm2.5-1.2b-instruct`.
 - **The shared Ferry app code** — this is the important part. The `ferry/` service, the
   `/demo` & `/how` pages, and **new features** all live in the shared repo and run on
   **both** deployments. You're the primary dev on the codebase.
@@ -37,8 +37,7 @@ cd cerebras-gemma-hack
 
 # 1. Local model
 ollama serve &                 # wait until it's listening
-ollama pull gemma4:e2b         # if unavailable, pull any small model (e.g. gemma3:4b)
-                               # and set LOCAL_MODEL in .env to match
+ollama pull LiquidAI/lfm2.5-1.2b-instruct
 
 # 2. Config (NEVER commit .env — it's gitignored)
 cp .env.example .env           # paste CEREBRAS_API_KEYS (+ EXA_API_KEY for Track 1)
@@ -48,18 +47,19 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn ferry.main:app --reload --port 8080
 #   dashboard → http://localhost:8080/dashboard · demo → /demo · diagram → /how
-#   sanity: curl localhost:8080/v1/models → lists ferry / ferry-local / ferry-cloud
+#   sanity: curl localhost:8080/v1/models → lists only ferry
 
 # 4. Open WebUI — needs Python 3.11, in its OWN venv
 deactivate
 python3.11 -m venv .venv-webui && source .venv-webui/bin/activate
 pip install open-webui
 OPENAI_API_BASE_URL=http://localhost:8080/v1 OPENAI_API_KEY=ferry \
-ENABLE_OLLAMA_API=false WEBUI_AUTH=false open-webui serve --port 3000
+ENABLE_OLLAMA_API=false ENABLE_EVALUATION_ARENA_MODELS=false \
+WEBUI_AUTH=false open-webui serve --port 3000
 #   chat → http://localhost:3000 → pick the "ferry" model
 #   no models? Admin → Connections → add http://localhost:8080/v1, key "ferry"
 ```
-Verify: short prompt answers instantly (local `gemma4:e2b`); a long/"analyze…" prompt
+Verify: short prompt answers instantly (local `LiquidAI/lfm2.5-1.2b-instruct`); a long/"analyze…" prompt
 shows `⏳ Queued` then bursts to Cerebras. Toggle the window with the dashboard buttons or
 `curl -X POST localhost:8080/demo/online/false|true|auto`.
 
@@ -67,23 +67,23 @@ shows `⏳ Queued` then bursts to Cerebras. Toggle the window with the dashboard
 - Single Cerebras call: full answer in **~0.22s**.
 - Parallel burst: **8 queued tasks drained in ~0.9s**, 0 errors.
 - Held-open bubble: placeholder → Cerebras answer in one stream.
-- Local `gemma4:e2b` generates on-device.
+- Local `LiquidAI/lfm2.5-1.2b-instruct` generates on-device.
 - The Jetson side is **live** end-to-end (Liquid local + Cerebras burst through Open WebUI).
 
-## Cloud model (the prize model)
-Ferry bursts to **`gemma-4-31b`** on Cerebras — live and verified (~0.2s answers, clean
-tool-calling). Your key needs Gemma 4 preview access; `gpt-oss-120b` is the fallback if a
-key lacks it. (`reasoning_effort=none` is omitted in `clients.py` because some fallback
-models reject it.)
+## Cloud model status (important for the prize)
+The shared key now has `gemma-4-31b` access. Keep `CEREBRAS_MODEL=gemma-4-31b`
+in `.env`; this is the central cloud model for every burst. Keys need Gemma 4
+preview access; set `CEREBRAS_MODEL=gpt-oss-120b` manually only if a key lacks
+that access. (`reasoning_effort=none` is omitted in `clients.py` because some
+fallback models reject it.)
 
 ## Open work (good places to start)
-- **Track 1 (the $2K prize): tools — DONE (v1).** The `ferry-agent` model runs a Cerebras
-  tool-calling loop with `web_search` (Exa) and `run_code` (E2B sandbox — executes Python
-  and creates files). See `ferry/tools.py` and `Clients.cerebras_agent`. Add `EXA_API_KEY`
-  and `E2B_API_KEY` to `.env`. **Still open:** true multi-agent fan-out (parallel sub-agents
-  + synthesis) and multimodal (image → Gemma 4 vision). Output is clean on `gemma-4-31b`.
-- **Multimodal:** an image queued task → Gemma 4 vision on Cerebras (and `gemma4:e2b` is
-  multimodal locally).
+- **Track 1 (the $2K prize): tools + multi-agent — DONE (v1).** Open WebUI sees only
+  `ferry`; Ferry internally decides between local, a tool-enabled Gemma 4 agent, and
+  multi-agent Gemma 4 fan-out + synthesis. Tools are `web_search` (Exa) and `run_code`
+  (E2B sandbox — executes Python and creates files). Add `EXA_API_KEY` and `E2B_API_KEY`
+  to `.env`. **Still open:** multimodal (image → Gemma 4 vision).
+- **Multimodal:** an image queued task → Gemma 4 vision on Cerebras.
 - **Polish** the `/demo` and `/how` pages (black-and-white shadcn style — keep it minimal).
 - **The ≤60s demo video** showing Cerebras speed (side-by-side vs a GPU provider is a plus).
 

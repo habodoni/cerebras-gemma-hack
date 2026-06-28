@@ -28,6 +28,11 @@ class ConnectivityWatcher:
             return self.override
         return self._reachable
 
+    def can_burst(self) -> bool:
+        if self.override is False:
+            return False
+        return self._reachable
+
     @property
     def real_reachable(self) -> bool:
         return self._reachable
@@ -35,6 +40,15 @@ class ConnectivityWatcher:
     def set_override(self, value: bool | None) -> None:
         self.override = value
         log.info("watcher override set to %s", value)
+
+    async def can_burst_now(self) -> bool:
+        if self.override is False:
+            return False
+        return await self.probe_now()
+
+    async def probe_now(self) -> bool:
+        self._reachable = await self._probe()
+        return self._reachable
 
     async def _probe(self) -> bool:
         try:
@@ -47,8 +61,7 @@ class ConnectivityWatcher:
 
     async def run(self) -> None:
         while True:
-            if self.override is None:
-                self._reachable = await self._probe()
+            await self.probe_now()
             await asyncio.sleep(settings.watcher_interval)
 
     async def aclose(self) -> None:

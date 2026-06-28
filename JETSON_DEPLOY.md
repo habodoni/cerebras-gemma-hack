@@ -13,7 +13,7 @@ This is the from-scratch runbook. For day-to-day start/stop/check, see
 client (browser, on the Jetson's network)
    │  http://<jetson-ip>:3000
    ▼
-Open WebUI ──► Ferry ──► Ollama · LFM2.5-1.2B        (local, offline)
+Open WebUI ──► Ferry ──► Ollama · LiquidAI/LFM2.5    (local, offline)
 (Docker :3000) (:8080)   (:11434)  └─ queue ─► Cerebras  (burst, over the uplink)
 ```
 
@@ -22,7 +22,7 @@ Stack: **Ollama (native) → Ferry (systemd) → Open WebUI (Docker)**.
 ---
 
 ## Prerequisites (on the Jetson)
-- [x] Ollama running natively, with `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` pulled
+- [x] Ollama running natively, with `LiquidAI/lfm2.5-1.2b-instruct` pulled
       (`ollama list` to confirm).
 - [x] **Docker** running. Open WebUI runs as a **container** — the Jetson ships
       Python 3.10, and Open WebUI needs 3.11, so Docker avoids a Python install.
@@ -44,7 +44,7 @@ pip install -r requirements.txt
 
 cp .env.jetson.example .env
 # edit .env: paste CEREBRAS_API_KEYS. LOCAL_MODEL is already the Liquid id;
-# CEREBRAS_MODEL stays gpt-oss-120b until your key has Gemma 4 access.
+# CEREBRAS_MODEL should be gemma-4-31b.
 
 # smoke test on all interfaces, then Ctrl-C
 uvicorn ferry.main:app --host 0.0.0.0 --port 8080
@@ -121,7 +121,7 @@ Only deployment + config — the Ferry code is identical.
 
 | | Mac flow | Jetson flow |
 |---|---|---|
-| `LOCAL_MODEL` | `gemma4:e2b` | `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` |
+| `LOCAL_MODEL` | `LiquidAI/lfm2.5-1.2b-instruct` | `LiquidAI/lfm2.5-1.2b-instruct` |
 | Ferry | `uvicorn` native | systemd `ferry.service` |
 | Open WebUI | native (pip, Python 3.11) | Docker container |
 | Runs on | the Mac | the Jetson |

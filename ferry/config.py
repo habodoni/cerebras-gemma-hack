@@ -16,8 +16,13 @@ def _split(value: str) -> list[str]:
 @dataclass
 class Settings:
     # Local edge model (the offline brain), served by Ollama's OpenAI-compatible API.
-    local_model: str = os.getenv("LOCAL_MODEL", "gemma4:e2b")
+    local_model: str = os.getenv("LOCAL_MODEL", "LiquidAI/lfm2.5-1.2b-instruct")
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    local_max_tokens: int = int(os.getenv("LOCAL_MAX_TOKENS", "64"))
+    local_temperature: float = float(os.getenv("LOCAL_TEMPERATURE", "0.2"))
+    local_timeout_seconds: float = float(os.getenv("LOCAL_TIMEOUT_SECONDS", "45"))
+    local_context_messages: int = int(os.getenv("LOCAL_CONTEXT_MESSAGES", "4"))
+    local_context_chars: int = int(os.getenv("LOCAL_CONTEXT_CHARS", "2400"))
 
     # Cloud burst model on Cerebras.
     cerebras_base_url: str = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
@@ -34,8 +39,18 @@ class Settings:
     exa_api_key: str = os.getenv("EXA_API_KEY", "")
     # Code execution sandbox (E2B) — run code / create files mid-answer.
     e2b_api_key: str = os.getenv("E2B_API_KEY", "")
+    e2b_file_roots: list[str] = field(
+        default_factory=lambda: _split(
+            os.getenv("E2B_FILE_ROOTS", "/home/user,/mnt/data")
+        )
+    )
+    e2b_file_list_depth: int = int(os.getenv("E2B_FILE_LIST_DEPTH", "6"))
+    e2b_max_files: int = int(os.getenv("E2B_MAX_FILES", "20"))
+    e2b_max_file_bytes: int = int(os.getenv("E2B_MAX_FILE_BYTES", str(10 * 1024 * 1024)))
     # Max tool-calling rounds in the agentic burst.
     agent_max_steps: int = int(os.getenv("AGENT_MAX_STEPS", "6"))
+    # Number of parallel sub-agents for the multiverse fan-out model.
+    multiverse_agents: int = int(os.getenv("MULTIVERSE_AGENTS", "3"))
 
     # Router: heuristic | llm | always_cloud | always_local
     router_mode: str = os.getenv("ROUTER_MODE", "heuristic")
@@ -54,6 +69,8 @@ class Settings:
 
     # Storage.
     db_path: str = os.getenv("DB_PATH", "./data/ferry.db")
+    generated_files_dir: str = os.getenv("GENERATED_FILES_DIR", "./data/generated")
+    public_base_url: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
 
     # UX.
     placeholder_text: str = os.getenv(
@@ -65,8 +82,8 @@ class Settings:
 
     @property
     def service_models(self) -> list[str]:
-        # Primary auto-routing model, plus escape hatches for demo control.
-        return ["ferry", "ferry-local", "ferry-cloud", "ferry-agent"]
+        # Open WebUI should show one model; Ferry does all routing internally.
+        return ["ferry"]
 
 
 settings = Settings()
