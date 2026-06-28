@@ -10,64 +10,113 @@
   body{ margin:0; background:var(--bg); color:var(--fg);
     font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif; -webkit-font-smoothing:antialiased; }
   .wrap{ max-width:1000px; margin:0 auto; padding:28px 20px 60px; }
-  .top{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  .top{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
   .brand{ display:flex; align-items:center; gap:10px; font-weight:650; font-size:17px; letter-spacing:-.01em; }
   .brand .mark{ width:26px; height:26px; border:1px solid var(--fg); border-radius:8px; display:grid; place-items:center; }
   .top .spacer{ flex:1; }
   .top a{ font-size:12.5px; text-decoration:none; border:1px solid var(--border); padding:6px 12px; border-radius:8px; color:inherit; }
   .top a:hover{ background:var(--subtle); }
-  .lede{ color:var(--muted); font-size:13.5px; margin:0 0 16px; max-width:680px; }
 
-  /* status pill */
+  /* tabs */
+  .tabs{ display:inline-flex; border:1px solid var(--border); border-radius:10px; padding:3px; background:var(--subtle-2); margin-bottom:14px; }
+  .tab{ font:inherit; font-size:13px; font-weight:550; color:var(--muted); background:none; border:0; cursor:pointer;
+    padding:6px 14px; border-radius:7px; transition:.15s; display:flex; align-items:center; gap:7px; }
+  .tab.active{ background:var(--fg); color:#fff; }
+
+  .lede{ color:var(--muted); font-size:13.5px; margin:0 0 16px; max-width:710px; }
+
+  /* status pill + caption */
+  .statusrow{ display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
   .status{ display:inline-flex; align-items:center; gap:9px; border:1px solid var(--border); border-radius:999px;
-    padding:7px 14px; font-size:13px; font-weight:550; margin-bottom:10px; transition:.2s; }
+    padding:7px 14px; font-size:13px; font-weight:550; transition:.2s; }
   .status .led{ width:9px; height:9px; border-radius:999px; background:var(--muted); }
   .status.on{ border-color:var(--fg); }
   .status.on .led{ background:var(--fg); animation:beat 1s infinite; }
   @keyframes beat{ 50%{ transform:scale(.55); } }
+  .caption{ font-size:12.5px; color:var(--muted); }
+  .caption b{ color:var(--fg); font-weight:600; }
 
   /* stage */
-  .frame{ border:1px solid var(--border); border-radius:18px; background:
-    linear-gradient(0deg,var(--subtle-2),var(--subtle-2)); overflow:hidden; }
+  .frame{ border:1px solid var(--border); border-radius:18px; background:var(--subtle-2); overflow:hidden; }
   .scaler{ width:100%; display:flex; justify-content:center; }
   .stage{ position:relative; width:920px; height:480px; transform-origin:top center; }
   svg.lines{ position:absolute; inset:0; width:920px; height:480px; z-index:0; }
   .guide{ fill:none; stroke:var(--border); stroke-width:2; }
-  .guide.cloud{ stroke-dasharray:6 7; transition:.25s; }
-  .stage.online .guide.cloud{ stroke:var(--fg); stroke-dasharray:6 7; opacity:.85; }
+  .guide.cloud{ stroke-dasharray:6 7; transition:stroke .25s, opacity .25s; opacity:.7; }
+  .stage.online .guide.cloud{ stroke:var(--fg); opacity:.9; }
+  /* always-on local hotspot link: marching dashes */
+  .guide.hotspot-line{ stroke:var(--fg); stroke-width:2; stroke-dasharray:2 5; animation:march 1s linear infinite; opacity:.8; }
+  @keyframes march{ to{ stroke-dashoffset:-14; } }
+
+  /* boundaries */
+  .device{ fill:none; stroke:var(--border); stroke-width:1.5; stroke-dasharray:3 6; }
+  .device-label{ position:absolute; z-index:1; font-size:10.5px; font-weight:650;
+    letter-spacing:.10em; text-transform:uppercase; color:var(--muted); }
 
   .node{ position:absolute; z-index:1; background:#fff; border:1px solid var(--border); border-radius:13px;
     padding:9px 12px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
   .node .t{ font-size:13px; font-weight:600; display:flex; align-items:center; gap:7px; letter-spacing:-.01em; }
   .node .s{ font-size:11px; color:var(--muted); margin-top:1px; }
   .node.accent{ border-color:var(--fg); }
+  .node.pulse{ animation:pulse .6s ease; }
+  @keyframes pulse{ 0%{ box-shadow:0 0 0 0 rgba(9,9,11,.18);} 100%{ box-shadow:0 0 0 12px rgba(9,9,11,0);} }
   .badge{ position:absolute; top:-9px; right:-9px; min-width:22px; height:22px; padding:0 6px; border-radius:999px;
     background:var(--fg); color:#fff; font-size:11.5px; font-weight:650; display:grid; place-items:center;
     transform:scale(0); transition:transform .2s; }
   .badge.show{ transform:scale(1); }
 
+  /* hotspot marker (jetson) */
+  .hotspot{ position:absolute; z-index:1; text-align:center; font-size:10px; color:var(--muted); width:80px; }
+  .hotspot .ic{ font-size:15px; }
+  .hotspot b{ display:block; color:var(--fg); font-size:10px; font-weight:650; letter-spacing:.04em; }
+
+  /* held-open bubble — the signature moment */
+  .held{ position:absolute; z-index:2; width:150px; display:flex; align-items:center; gap:7px;
+    border:1px solid var(--border); border-radius:10px; padding:6px 9px; background:#fff; font-size:11.5px;
+    opacity:0; transform:translateY(-4px); transition:.25s; }
+  .held.show{ opacity:1; transform:none; }
+  .held .ic{ width:16px; height:16px; border-radius:999px; border:1.5px solid var(--muted); display:grid; place-items:center;
+    font-size:10px; color:var(--muted); flex:none; }
+  .held .ic.spin{ border-top-color:var(--fg); animation:spin .9s linear infinite; }
+  .held.done{ border-color:var(--fg); }
+  .held.done .ic{ border-color:var(--fg); background:var(--fg); color:#fff; }
+  .held .lbl{ color:var(--muted); }
+  .held.done .lbl{ color:var(--fg); font-weight:550; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* key pool */
+  .pool{ position:absolute; z-index:1; display:flex; gap:5px; }
+  .pool .key{ font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--border); border-radius:6px;
+    padding:1px 6px; background:#fff; transition:.15s; }
+  .pool .key.lit{ color:#fff; background:var(--fg); border-color:var(--fg); }
+
   /* gate */
   .gate{ position:absolute; z-index:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .gate .bars{ position:relative; width:34px; height:46px; }
-  .gate .bar{ position:absolute; top:0; width:4px; height:46px; background:var(--fg); border-radius:2px; transition:.3s; }
-  .gate .bar.l{ left:7px; } .gate .bar.r{ right:7px; }
-  .stage.online .gate .bar.l{ transform:translateX(-7px); opacity:.25; }
-  .stage.online .gate .bar.r{ transform:translateX(7px); opacity:.25; }
-  .gate .cap{ font-size:10px; font-weight:650; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; }
+  .gate .bars{ position:relative; width:30px; height:50px; }
+  .gate .bar{ position:absolute; top:0; width:4px; height:50px; background:var(--fg); border-radius:2px; transition:.3s; }
+  .gate .bar.l{ left:6px; } .gate .bar.r{ right:6px; }
+  .stage.online .gate .bar.l{ transform:translateX(-6px); opacity:.22; }
+  .stage.online .gate .bar.r{ transform:translateX(6px); opacity:.22; }
+  .gate .cap{ font-size:9.5px; font-weight:650; letter-spacing:.07em; color:var(--muted); text-transform:uppercase; white-space:nowrap; }
   .stage.online .gate .cap{ color:var(--fg); }
 
-  /* dots */
+  /* dots — solid = request out, ring = answer back */
   .dot{ position:absolute; left:0; top:0; width:10px; height:10px; border-radius:999px; background:var(--fg);
-    z-index:2; offset-rotate:0deg; box-shadow:0 0 0 3px rgba(9,9,11,.08); }
+    z-index:2; box-shadow:0 0 0 3px rgba(9,9,11,.07); }
   .dot.hard{ border-radius:3px; }
+  .dot.back{ background:#fff; border:2px solid var(--fg); box-shadow:0 0 0 3px rgba(9,9,11,.06); }
 
   .legend{ display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; color:var(--muted); font-size:12.5px; }
   .legend b{ color:var(--fg); font-weight:600; }
   .legend .k{ display:inline-flex; align-items:center; gap:7px; }
   .legend .s1{ width:10px; height:10px; border-radius:999px; background:var(--fg); }
   .legend .s2{ width:10px; height:10px; border-radius:3px; background:var(--fg); }
+  .legend .s4{ width:10px; height:10px; border-radius:999px; background:#fff; border:2px solid var(--fg); }
   .legend .s3{ width:18px; height:0; border-top:2px dashed var(--fg); }
-  .note{ margin-top:14px; color:var(--muted); font-size:12px; }
+  .note{ margin-top:14px; color:var(--muted); font-size:12px; max-width:760px; }
+  .note code{ font:11.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:var(--fg);
+    background:var(--subtle); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+  [hidden]{ display:none !important; }
 </style>
 </head>
 <body>
@@ -77,156 +126,368 @@
     <div class="spacer"></div>
     <a href="/demo">Open the live demo →</a>
   </div>
-  <p class="lede">Ferry sits between your chat and the models. Easy prompts are answered instantly on-device.
-  Hard ones wait in an on-device backlog — and the moment a connection window opens, they burst to Gemma 4 on
-  Cerebras in parallel and the answers stream straight back.</p>
 
-  <div class="status" id="status"><span class="led"></span><span id="statusText">Offline — backlog holding</span></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="local">💻 Local device</button>
+    <button class="tab" data-tab="jetson">🤖 Jetson hub</button>
+  </div>
 
-  <div class="frame">
-    <div class="scaler">
-      <div class="stage" id="stage">
-        <svg class="lines" viewBox="0 0 920 480">
-          <!-- easy: you -> ferry -> on-device -> back to you -->
-          <path class="guide" d="M150,230 L352,228 C418,214 432,120 474,118 C302,58 150,116 138,214" />
-          <!-- hard in: you -> ferry -> backlog -->
-          <path class="guide" d="M150,232 L352,234 C432,300 442,330 470,330" />
-          <!-- cloud: backlog -> window -> cerebras -> back to you -->
-          <path class="guide cloud" d="M618,330 H700 H820 C700,424 252,432 120,250" />
-        </svg>
+  <!-- ============================ LOCAL DEVICE ============================ -->
+  <section class="scene" data-tab="local">
+    <p class="lede">On a laptop, <b style="color:var(--fg)">your device is the whole stack</b>. Easy prompts are answered
+    instantly on-device — no network needed. Hard ones wait in an on-device backlog, and the moment your connection
+    blips on they burst to Gemma 4 on Cerebras across a pool of keys in parallel — answers streaming back into the same bubble.</p>
 
-        <div class="node" style="left:30px; top:202px; width:120px;">
-          <div class="t">👤 You</div><div class="s">phone · field</div>
-        </div>
-        <div class="node accent" style="left:232px; top:198px; width:140px;">
-          <div class="t">🛶 Ferry</div><div class="s">router · OpenAI-compatible</div>
-        </div>
-        <div class="node" style="left:476px; top:90px; width:170px;">
-          <div class="t">⚡ gemma4:e2b</div><div class="s">on-device · instant, offline</div>
-        </div>
-        <div class="node" id="backlogNode" style="left:470px; top:302px; width:150px;">
-          <div class="t">▤ Backlog</div><div class="s">SQLite · FIFO</div>
-          <div class="badge" id="backlogBadge">0</div>
-        </div>
-        <div class="gate" id="gate" style="left:684px; top:296px;">
-          <div class="bars"><div class="bar l"></div><div class="bar r"></div></div>
-          <div class="cap" id="gateCap">Closed</div>
-        </div>
-        <div class="node accent" style="left:760px; top:302px; width:150px;">
-          <div class="t">🟧 gemma-4-31b</div><div class="s">Cerebras · ~0.2s</div>
+    <div class="statusrow">
+      <div class="status js-status"><span class="led"></span><span class="js-statusText">Offline — backlog holding</span></div>
+      <div class="caption js-caption">Hard tasks are piling up on your laptop, waiting for signal.</div>
+    </div>
+
+    <div class="frame">
+      <div class="scaler">
+        <div class="stage">
+          <svg class="lines" viewBox="0 0 920 480">
+            <rect class="device" x="12" y="56" width="652" height="360" rx="20" />
+            <path class="guide" d="M148,229 H281 C420,229 400,118 470,118 C340,118 240,150 148,237" />
+            <path class="guide" d="M148,239 H281 C430,239 410,328 478,328" />
+            <path class="guide cloud" d="M638,328 H730" />
+            <path class="guide cloud" d="M790,356 C770,452 280,456 88,258" />
+          </svg>
+
+          <div class="device-label" style="left:24px; top:64px;">Your laptop · works offline</div>
+
+          <div class="node" style="left:28px; top:206px; width:120px;">
+            <div class="t">👤 You</div><div class="s">browser · field</div>
+          </div>
+          <div class="held js-held" style="left:28px; top:262px;">
+            <span class="ic js-heldIc">⏳</span><span class="lbl js-heldLbl">waiting…</span>
+          </div>
+          <div class="node accent js-ferry" style="left:206px; top:200px; width:150px;">
+            <div class="t">🛶 Ferry</div><div class="s">router · OpenAI-compatible</div>
+          </div>
+          <div class="node" style="left:470px; top:92px; width:178px;">
+            <div class="t">⚡ gemma4:e2b</div><div class="s">on-device · instant, offline</div>
+          </div>
+          <div class="node js-backlog" style="left:478px; top:300px; width:160px;">
+            <div class="t">▤ Backlog</div><div class="s">SQLite · FIFO · durable</div>
+            <div class="badge js-badge">0</div>
+          </div>
+          <div class="gate js-gate" style="left:649px; top:294px;">
+            <div class="bars"><div class="bar l"></div><div class="bar r"></div></div>
+            <div class="cap js-gateCap">Closed</div>
+          </div>
+          <div class="pool js-pool" style="left:730px; top:262px;">
+            <span class="key">key 1</span><span class="key">key 2</span><span class="key">key 3</span>
+          </div>
+          <div class="node accent js-cloud" style="left:730px; top:300px; width:176px;">
+            <div class="t">🟧 gemma-4-31b</div><div class="s">Cerebras · ~0.2s · key pool</div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="legend">
-    <span class="k"><span class="s1"></span> <b>easy task</b> → answered on-device, instantly</span>
-    <span class="k"><span class="s2"></span> <b>hard task</b> → queued in the backlog</span>
-    <span class="k"><span class="s3"></span> <b>cloud route</b> → dashed when offline, live during a window</span>
-  </div>
-  <p class="note">Loops automatically. The connection window opens for a few seconds, drains the backlog to Cerebras in parallel, then closes — exactly the real behaviour.</p>
+    <div class="legend">
+      <span class="k"><span class="s1"></span> <b>easy task</b> → answered on-device, instantly</span>
+      <span class="k"><span class="s2"></span> <b>hard task</b> → queued in the backlog</span>
+      <span class="k"><span class="s4"></span> <b>answer back</b> → streamed into the same bubble</span>
+      <span class="k"><span class="s3"></span> <b>cloud route</b> → dashed when offline, live during a window</span>
+    </div>
+    <p class="note">Loops automatically. Your connection blips on for a few seconds, the backlog fans out to Cerebras
+    in parallel across the key pool, every answer streams back into its waiting bubble, then it closes.</p>
+  </section>
+
+  <!-- ============================ JETSON HUB ============================ -->
+  <section class="scene" data-tab="jetson" hidden>
+    <p class="lede">A <b style="color:var(--fg)">Jetson Orin Nano is the hub</b> — it runs Ferry, the on-device model, and
+    the chat UI. Weak client devices join its WiFi hotspot (always on, no internet needed), so the chat never goes dark.
+    Only the hub's <b style="color:var(--fg)">uplink</b> flickers — and when it opens, the backlog bursts to Cerebras and streams back to the client.</p>
+
+    <div class="statusrow">
+      <div class="status js-status"><span class="led"></span><span class="js-statusText">Uplink down — backlog holding</span></div>
+      <div class="caption js-caption">The hub serves the client over the hotspot while hard tasks wait for the uplink.</div>
+    </div>
+
+    <div class="frame">
+      <div class="scaler">
+        <div class="stage">
+          <svg class="lines" viewBox="0 0 920 480">
+            <!-- hub boundary -->
+            <rect class="device" x="206" y="56" width="458" height="360" rx="20" />
+            <!-- always-on hotspot link: client -> hub -->
+            <path class="guide hotspot-line" d="M130,230 H224" />
+            <!-- easy: client -> ferry -> on-device -> client -->
+            <path class="guide" d="M224,229 H300 C430,229 405,118 470,118 C345,118 250,150 130,238" />
+            <!-- hard in: client -> ferry -> backlog -->
+            <path class="guide" d="M224,239 H300 C435,239 412,328 478,328" />
+            <!-- uplink out / back -->
+            <path class="guide cloud" d="M638,328 H730" />
+            <path class="guide cloud" d="M790,356 C770,452 270,456 75,258" />
+          </svg>
+
+          <div class="device-label" style="left:218px; top:64px;">Jetson Orin Nano hub · works offline</div>
+
+          <div class="node" style="left:20px; top:206px; width:110px;">
+            <div class="t">📱 Client</div><div class="s">phone · on hotspot</div>
+          </div>
+          <div class="held js-held" style="left:18px; top:262px;">
+            <span class="ic js-heldIc">⏳</span><span class="lbl js-heldLbl">waiting…</span>
+          </div>
+
+          <div class="hotspot" style="left:135px; top:188px;">
+            <div class="ic">📶</div><b>hotspot</b>always on
+          </div>
+
+          <div class="node accent js-ferry" style="left:224px; top:200px; width:152px;">
+            <div class="t">🛶 Ferry + UI</div><div class="s">router · serves the client</div>
+          </div>
+          <div class="node" style="left:470px; top:92px; width:182px;">
+            <div class="t">⚡ LFM2.5-1.2B</div><div class="s">on-device · fits the Orin Nano</div>
+          </div>
+          <div class="node js-backlog" style="left:478px; top:300px; width:160px;">
+            <div class="t">▤ Backlog</div><div class="s">SQLite · FIFO · durable</div>
+            <div class="badge js-badge">0</div>
+          </div>
+          <div class="gate js-gate" style="left:649px; top:294px;">
+            <div class="bars"><div class="bar l"></div><div class="bar r"></div></div>
+            <div class="cap js-gateCap">Uplink down</div>
+          </div>
+          <div class="pool js-pool" style="left:730px; top:262px;">
+            <span class="key">key 1</span><span class="key">key 2</span><span class="key">key 3</span>
+          </div>
+          <div class="node accent js-cloud" style="left:730px; top:300px; width:176px;">
+            <div class="t">🟧 gemma-4-31b</div><div class="s">Cerebras · ~0.2s · key pool</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="k"><span class="s1"></span> <b>easy task</b> → answered on the hub, instantly</span>
+      <span class="k"><span class="s2"></span> <b>hard task</b> → queued in the backlog</span>
+      <span class="k"><span class="s4"></span> <b>answer back</b> → streamed to the client over the hotspot</span>
+      <span class="k"><span class="s3"></span> <b>uplink</b> → dashed when down, live during a window</span>
+    </div>
+    <p class="note">The on-device brain is <code>LFM2.5-1.2B</code> (<code>bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M</code>) — lighter
+    than <code>gemma4:e2b</code> so it fits the Orin Nano; it's just <code>LOCAL_MODEL</code> in config. The client↔hub
+    hotspot is always on; only the hub's uplink to Cerebras gates the burst. Cloud model stays <code>gemma-4-31b</code>.</p>
+  </section>
 </div>
 
 <script>
-const PATHS = {
-  easy:   "M150,230 L352,228 C418,214 432,120 474,118 C302,58 150,116 138,214",
-  hardin: "M150,232 L352,234 C432,300 442,330 470,330",
-  burst:  "M618,330 H700 H820 C700,424 252,432 120,250",
+const COPY = {
+  local: {
+    offlineStatus: "Offline — backlog holding",
+    offlineCaption: "Hard tasks are piling up on your laptop, waiting for signal.",
+    burstStatus: (n) => `Online — bursting ${n} to Cerebras`,
+    burstCaption: (n) => `Window open — fanning <b>${n}</b> tasks across the key pool in parallel.`,
+    clearedStatus: "Online — backlog cleared",
+    clearedCaption: (n) => `All <b>${n}</b> answers delivered into their original bubbles.`,
+    gateOpen: "Open", gateClosed: "Closed",
+  },
+  jetson: {
+    offlineStatus: "Uplink down — backlog holding",
+    offlineCaption: "The hub serves the client over the hotspot while hard tasks wait for the uplink.",
+    burstStatus: (n) => `Uplink open — bursting ${n} to Cerebras`,
+    burstCaption: (n) => `Uplink open — the hub fans <b>${n}</b> tasks across the key pool in parallel.`,
+    clearedStatus: "Uplink open — backlog cleared",
+    clearedCaption: (n) => `All <b>${n}</b> answers streamed back to the client.`,
+    gateOpen: "Open", gateClosed: "Uplink down",
+  },
 };
-const stage = document.getElementById("stage");
-const statusEl = document.getElementById("status");
-const statusText = document.getElementById("statusText");
-const gateCap = document.getElementById("gateCap");
-const badge = document.getElementById("backlogBadge");
+// per-lane cloud paths so a parallel burst reads as N simultaneous streams
+const out = (dy) => `M638,${328+dy} H730`;
+const back = {
+  local:  (dy) => `M${790+dy},356 C770,452 ${280+dy*4},456 88,258`,
+  jetson: (dy) => `M${790+dy},356 C770,452 ${270+dy*4},456 75,258`,
+};
 
-let online = false;
-let backlog = 0;
-let spawnHard = false;
+function buildScene(sceneEl, copy, paths){
+  const stage   = sceneEl.querySelector(".stage");
+  const statusEl = sceneEl.querySelector(".js-status");
+  const statusText = sceneEl.querySelector(".js-statusText");
+  const captionEl = sceneEl.querySelector(".js-caption");
+  const gateCap = sceneEl.querySelector(".js-gateCap");
+  const badge   = sceneEl.querySelector(".js-badge");
+  const held    = sceneEl.querySelector(".js-held");
+  const heldIc  = sceneEl.querySelector(".js-heldIc");
+  const heldLbl = sceneEl.querySelector(".js-heldLbl");
+  const poolKeys = [...sceneEl.querySelectorAll(".js-pool .key")];
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  let online = false, backlog = 0, pending = 0, spawnHard = false, alive = false;
+  let easyTimer = null;
+  const timers = new Set();
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-function setBadge(n){
-  badge.textContent = n;
-  badge.classList.toggle("show", n > 0);
-}
+  function setBadge(n){ badge.textContent = n; badge.classList.toggle("show", n > 0); }
+  function flashNode(sel){
+    const el = sceneEl.querySelector(sel);
+    el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse");
+  }
+  function setHeld(){
+    if (pending > 0){
+      held.classList.add("show"); held.classList.remove("done");
+      heldIc.className = "ic spin"; heldIc.textContent = "";
+      heldLbl.textContent = pending === 1 ? "1 answer on the way…" : pending + " answers on the way…";
+    } else { held.classList.remove("show"); }
+  }
+  function deliveredHeld(){
+    held.classList.add("show","done");
+    heldIc.className = "ic"; heldIc.textContent = "✓";
+    heldLbl.textContent = "delivered in the same bubble";
+    flashNode(".js-ferry");
+  }
+  function setOnline(v){
+    online = v;
+    stage.classList.toggle("online", v);
+    statusEl.classList.toggle("on", v);
+    gateCap.textContent = v ? copy.gateOpen : copy.gateClosed;
+  }
+  function ride(kind, pathStr, dur){
+    const el = document.createElement("div");
+    el.className = "dot" + (kind ? " " + kind : "");
+    el.style.offsetPath = `path('${pathStr}')`;
+    el.style.offsetRotate = "0deg";
+    stage.appendChild(el);
+    const anim = el.animate(
+      [{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
+      { duration: dur, easing: "cubic-bezier(.45,.05,.55,.95)", fill: "forwards" }
+    );
+    return { el, anim };
+  }
 
-function ride(kind, pathStr, dur){
-  const el = document.createElement("div");
-  el.className = "dot" + (kind === "hard" ? " hard" : "");
-  el.style.offsetPath = `path('${pathStr}')`;
-  el.style.offsetRotate = "0deg";
-  stage.appendChild(el);
-  const anim = el.animate(
-    [{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
-    { duration: dur, easing: "cubic-bezier(.45,.05,.55,.95)", fill: "forwards" }
-  );
-  return { el, anim };
-}
-
-// Easy tasks: a steady trickle, always instant on-device.
-function easyLoop(){
-  const { el, anim } = ride("easy", PATHS.easy, 2500);
-  anim.onfinish = () => el.remove();
-}
-setInterval(easyLoop, 1500);
-easyLoop();
-
-// Hard tasks arrive while offline and pile into the backlog.
-async function hardSpawner(){
-  while (true){
-    if (spawnHard){
-      const { el, anim } = ride("hard", PATHS.hardin, 1500);
-      anim.onfinish = () => { el.remove(); backlog++; setBadge(backlog); };
+  function easyLoop(){
+    if (!alive) return;
+    const { el, anim } = ride("", paths.easy, 2500);
+    anim.onfinish = () => el.remove();
+  }
+  async function hardSpawner(){
+    while (alive){
+      if (spawnHard){
+        const { el, anim } = ride("hard", paths.hardin, 1500);
+        anim.onfinish = () => {
+          el.remove();
+          backlog++; setBadge(backlog);
+          pending++; setHeld();
+          flashNode(".js-backlog");
+        };
+      }
+      await sleep(950);
     }
-    await sleep(900);
   }
-}
-hardSpawner();
+  async function burst(){
+    const n = backlog;
+    if (!n){ await sleep(1200); return; }
+    statusText.textContent = copy.burstStatus(n);
+    captionEl.innerHTML = copy.burstCaption(n);
+    poolKeys.forEach(k => k.classList.add("lit"));
+    flashNode(".js-cloud");
 
-function setOnline(v){
-  online = v;
-  stage.classList.toggle("online", v);
-  statusEl.classList.toggle("on", v);
-  gateCap.textContent = v ? "Open" : "Closed";
-}
-
-// The burst: every parked task fires to Cerebras in parallel, then returns.
-async function burst(){
-  const n = backlog;
-  statusText.textContent = n ? `Online — bursting ${n} to Cerebras` : "Online — window open";
-  for (let i = 0; i < n; i++){
-    setTimeout(() => {
-      const { el, anim } = ride("burst", PATHS.burst, 1700);
-      anim.onfinish = () => el.remove();
-    }, i * 130);
-    backlog--; setBadge(Math.max(0, backlog));
+    let delivered = 0;
+    for (let i = 0; i < n; i++){
+      const lane = (i % 3 - 1) * 10;
+      const id = setTimeout(() => {
+        timers.delete(id);
+        if (!alive) return;
+        const o = ride("hard", out(lane), 700);
+        o.anim.onfinish = () => {
+          o.el.remove();
+          const b = ride("back", paths.back(lane), 1500);
+          b.anim.onfinish = () => {
+            b.el.remove();
+            delivered++;
+            pending = Math.max(0, pending - 1);
+            if (pending > 0){ setHeld(); } else { deliveredHeld(); }
+            if (delivered === n){
+              statusText.textContent = copy.clearedStatus;
+              captionEl.innerHTML = copy.clearedCaption(n);
+            }
+          };
+        };
+      }, i * 110);
+      timers.add(id);
+      backlog--; setBadge(Math.max(0, backlog));
+    }
+    backlog = 0; setBadge(0);
+    await sleep(Math.max(2400, n * 110 + 700 + 1500 + 300));
+    poolKeys.forEach(k => k.classList.remove("lit"));
   }
-  backlog = 0; setBadge(0);
-  // hold the window open long enough for the burst dots to land
-  await sleep(Math.max(1900, n * 130 + 1700));
-}
+  async function mainLoop(){
+    while (alive){
+      setOnline(false);
+      statusText.textContent = copy.offlineStatus;
+      captionEl.textContent = copy.offlineCaption;
+      spawnHard = true;
+      await sleep(4800); if (!alive) return;
+      spawnHard = false;
+      setOnline(true);
+      await burst(); if (!alive) return;
+      await sleep(1100); if (!alive) return;
+      held.classList.remove("show","done");
+    }
+  }
 
-// Main loop: offline (accumulate) -> online (burst) -> repeat.
-async function main(){
-  while (true){
+  function start(){
+    if (alive) return;
+    alive = true;
+    easyTimer = setInterval(easyLoop, 1500); easyLoop();
+    hardSpawner();
+    mainLoop();
+  }
+  function stop(){
+    alive = false;
+    clearInterval(easyTimer);
+    timers.forEach(clearTimeout); timers.clear();
+    stage.querySelectorAll(".dot").forEach(d => d.remove());
+    backlog = 0; pending = 0; setBadge(0);
+    held.classList.remove("show","done");
+    poolKeys.forEach(k => k.classList.remove("lit"));
     setOnline(false);
-    statusText.textContent = "Offline — backlog holding";
-    spawnHard = true;
-    await sleep(4600);
-    spawnHard = false;
-    setOnline(true);
-    await burst();
-    await sleep(700);
+    statusText.textContent = copy.offlineStatus;
+    captionEl.textContent = copy.offlineCaption;
   }
+  return { start, stop };
 }
-main();
 
-// Scale the fixed-size stage down on narrow screens.
+const scenes = {
+  local: buildScene(
+    document.querySelector('.scene[data-tab="local"]'), COPY.local,
+    { easy: "M148,229 H281 C420,229 400,118 470,118 C340,118 240,150 148,237",
+      hardin: "M148,239 H281 C430,239 410,328 478,328",
+      back: back.local }
+  ),
+  jetson: buildScene(
+    document.querySelector('.scene[data-tab="jetson"]'), COPY.jetson,
+    { easy: "M224,229 H300 C430,229 405,118 470,118 C345,118 250,150 130,238",
+      hardin: "M224,239 H300 C435,239 412,328 478,328",
+      back: back.jetson }
+  ),
+};
+
+let current = "local";
+scenes.local.start();
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    if (tab === current) return;
+    scenes[current].stop();
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".scene").forEach(s => s.hidden = (s.dataset.tab !== tab));
+    current = tab;
+    scenes[current].start();
+    fit();
+  });
+});
+
+// Scale the fixed-size stages down on narrow screens.
 function fit(){
-  const avail = document.querySelector(".frame").clientWidth;
-  const scale = Math.min(1, avail / 920);
-  stage.style.transform = `scale(${scale})`;
-  document.querySelector(".scaler").style.height = (480 * scale) + "px";
+  document.querySelectorAll(".scene:not([hidden]) .stage").forEach(stage => {
+    const avail = stage.closest(".frame").clientWidth;
+    if (!avail) return;
+    const scale = Math.min(1, avail / 920);
+    stage.style.transform = `scale(${scale})`;
+    stage.closest(".scaler").style.height = (480 * scale) + "px";
+  });
 }
 window.addEventListener("resize", fit); fit();
 </script>
