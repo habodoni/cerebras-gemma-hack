@@ -1,0 +1,35 @@
+# OPTIONAL — only for the Jetson deploy. For Mac dev, run everything natively
+# (see README): native Ollama, `uvicorn ferry.main:app`, and Open WebUI via
+# `pip install open-webui && open-webui serve`.
+#
+# This compose bundles just the two infra services (Ollama + Ferry). Open WebUI
+# is intentionally NOT containerized — run it locally and point it at Ferry.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+  ferry:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - DB_PATH=/app/data/ferry.db
+    volumes:
+      - ./data:/app/data
+      - ./seeds:/app/seeds
+      - ./static:/app/static
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama:

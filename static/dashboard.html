@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ferry — Backlog</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #243044; --text: #e6edf6;
+    --muted: #8a97aa; --amber: #f4b740; --blue: #4d9bff; --green: #36d399;
+    --red: #f06a6a; --accent: #ff6b3d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 16px 24px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+  h1 .sub { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  .pill { margin-left: auto; padding: 6px 14px; border-radius: 999px; font-weight: 600;
+    font-size: 13px; border: 1px solid var(--line); }
+  .pill.online { color: var(--green); border-color: var(--green); box-shadow: 0 0 16px -4px var(--green); }
+  .pill.offline { color: var(--muted); }
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card .n { font-size: 30px; font-weight: 700; }
+  .card .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .card.queued .n { color: var(--amber); }
+  .card.sending .n { color: var(--blue); }
+  .card.done .n { color: var(--green); }
+  .card.error .n { color: var(--red); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; align-items: center; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a0e08; font-weight: 600; }
+  button.danger:hover { border-color: var(--red); color: var(--red); }
+  .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  td.prompt { max-width: 520px; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.queued { background: rgba(244,183,64,.15); color: var(--amber); }
+  .badge.sending { background: rgba(77,155,255,.15); color: var(--blue); animation: pulse 1s infinite; }
+  .badge.done { background: rgba(54,211,153,.15); color: var(--green); }
+  .badge.error { background: rgba(240,106,106,.15); color: var(--red); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .id { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+  .answer { color: var(--muted); font-size: 12px; margin-top: 4px; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛶 Ferry <span class="sub" id="models"></span></h1>
+  <div class="pill offline" id="statePill">—</div>
+</header>
+<main>
+  <div class="stats">
+    <div class="card queued"><div class="n" id="c-queued">0</div><div class="l">Queued</div></div>
+    <div class="card sending"><div class="n" id="c-sending">0</div><div class="l">Sending</div></div>
+    <div class="card done"><div class="n" id="c-done">0</div><div class="l">Done</div></div>
+    <div class="card error"><div class="n" id="c-error">0</div><div class="l">Error</div></div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" onclick="online('true')">▶ Open window</button>
+    <button onclick="online('false')">⏸ Close window</button>
+    <button onclick="online('auto')">📶 Auto (real network)</button>
+    <button onclick="seed()">＋ Seed 100</button>
+    <button onclick="drain()">⚡ Drain now</button>
+    <button class="danger" onclick="clearAll()">🗑 Clear</button>
+    <span class="meta" id="meta"></span>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Status</th><th>Prompt</th><th>Route</th><th>Latency</th><th>ID</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function refresh() {
+  try {
+    const [s, t] = await Promise.all([
+      fetch('/api/status').then(r => r.json()),
+      fetch('/api/tasks?limit=200').then(r => r.json()),
+    ]);
+    renderStatus(s);
+    renderTasks(t);
+  } catch (e) { /* service starting */ }
+}
+
+function renderStatus(s) {
+  const pill = $('statePill');
+  const on = s.online;
+  pill.className = 'pill ' + (on ? 'online' : 'offline');
+  pill.textContent = on ? '● WINDOW OPEN' : '○ OFFLINE';
+  $('c-queued').textContent = s.counts.queued;
+  $('c-sending').textContent = s.counts.sending;
+  $('c-done').textContent = s.counts.done;
+  $('c-error').textContent = s.counts.error;
+  $('models').textContent = `${s.local_model}  →  ${s.cloud_model}`;
+  const ov = s.override === null ? 'auto' : String(s.override);
+  $('meta').textContent = `${s.keys} key(s) · router=${s.router_mode} · window=${ov}`;
+}
+
+function esc(x) { const d = document.createElement('div'); d.textContent = x ?? ''; return d.innerHTML; }
+
+function latency(t) {
+  if (t.sent_at && t.completed_at) {
+    const ms = Date.parse(t.completed_at) - Date.parse(t.sent_at);
+    if (!isNaN(ms)) return (ms / 1000).toFixed(1) + 's';
+  }
+  return '';
+}
+
+function renderTasks(tasks) {
+  $('rows').innerHTML = tasks.map(t => `
+    <tr>
+      <td><span class="badge ${t.status}">${t.status}</span></td>
+      <td class="prompt">${esc(t.prompt)}
+        ${t.response ? `<div class="answer">${esc(t.response)}</div>` : ''}
+        ${t.error ? `<div class="answer" style="color:var(--red)">${esc(t.error)}</div>` : ''}
+      </td>
+      <td>${esc(t.route || '')}</td>
+      <td>${latency(t)}</td>
+      <td class="id">${t.id.slice(0, 8)}</td>
+    </tr>`).join('');
+}
+
+async function online(state) { await fetch('/demo/online/' + state, { method: 'POST' }); refresh(); }
+async function seed() { await fetch('/demo/seed?count=100', { method: 'POST' }); refresh(); }
+async function drain() { await fetch('/demo/drain', { method: 'POST' }); refresh(); }
+async function clearAll() { if (confirm('Clear the whole backlog?')) { await fetch('/demo/clear', { method: 'POST' }); refresh(); } }
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>

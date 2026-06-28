@@ -1,0 +1,17 @@
+[
+  {"prompt": "Write a detailed 6-month go-to-market plan for a local-first AI product, including positioning, channels, and milestones.", "priority": 1},
+  {"prompt": "Analyze the trade-offs between SQLite, Postgres, and DuckDB for an on-device task backlog, and recommend one with justification.", "priority": 2},
+  {"prompt": "Refactor a synchronous Python request handler into an async one with bounded concurrency and explain each change.", "priority": 2},
+  {"prompt": "Summarize the key arguments for and against edge AI vs cloud AI in three paragraphs.", "priority": 3},
+  {"prompt": "Design a priority queue scheduler that maximizes value delivered within a 5-second connectivity window.", "priority": 1},
+  {"prompt": "Explain step by step how TLS session resumption reduces handshake latency on intermittent connections.", "priority": 3},
+  {"prompt": "Draft a compelling 60-second demo script that showcases ultra-fast inference for a hackathon.", "priority": 1},
+  {"prompt": "Compare three strategies for delivering async LLM answers back into a chat UI without a custom plugin.", "priority": 2},
+  {"prompt": "Derive the expected queue drain time given 100 tasks, 3 API keys, and a 100 RPM per-key limit.", "priority": 2},
+  {"prompt": "Write production-ready error handling for an HTTP client that retries across a pool of API keys.", "priority": 3},
+  {"prompt": "Translate a technical product brief into plain language a non-technical investor would understand.", "priority": 4},
+  {"prompt": "Evaluate the pros and cons of running a 2B vs 4B local model on a Jetson Orin Nano 8GB.", "priority": 3},
+  {"prompt": "Outline a comprehensive test plan for a service that switches between offline and online modes.", "priority": 4},
+  {"prompt": "Plan a multi-agent decomposition of a research question into parallel sub-queries and a synthesis step.", "priority": 1},
+  {"prompt": "Optimize a SQL query that scans a tasks table by status and created_at; suggest the right index.", "priority": 4}
+]

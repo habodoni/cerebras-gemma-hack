@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ferry — How it works</title>
+<style>
+  :root{ --bg:#fff; --fg:#09090b; --muted:#71717a; --border:#e4e4e7; --subtle:#f4f4f5; --subtle-2:#fafafa; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:1000px; margin:0 auto; padding:28px 20px 60px; }
+  .top{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight:650; font-size:17px; letter-spacing:-.01em; }
+  .brand .mark{ width:26px; height:26px; border:1px solid var(--fg); border-radius:8px; display:grid; place-items:center; }
+  .top .spacer{ flex:1; }
+  .top a{ font-size:12.5px; text-decoration:none; border:1px solid var(--border); padding:6px 12px; border-radius:8px; color:inherit; }
+  .top a:hover{ background:var(--subtle); }
+  .lede{ color:var(--muted); font-size:13.5px; margin:0 0 16px; max-width:680px; }
+
+  /* status pill */
+  .status{ display:inline-flex; align-items:center; gap:9px; border:1px solid var(--border); border-radius:999px;
+    padding:7px 14px; font-size:13px; font-weight:550; margin-bottom:10px; transition:.2s; }
+  .status .led{ width:9px; height:9px; border-radius:999px; background:var(--muted); }
+  .status.on{ border-color:var(--fg); }
+  .status.on .led{ background:var(--fg); animation:beat 1s infinite; }
+  @keyframes beat{ 50%{ transform:scale(.55); } }
+
+  /* stage */
+  .frame{ border:1px solid var(--border); border-radius:18px; background:
+    linear-gradient(0deg,var(--subtle-2),var(--subtle-2)); overflow:hidden; }
+  .scaler{ width:100%; display:flex; justify-content:center; }
+  .stage{ position:relative; width:920px; height:480px; transform-origin:top center; }
+  svg.lines{ position:absolute; inset:0; width:920px; height:480px; z-index:0; }
+  .guide{ fill:none; stroke:var(--border); stroke-width:2; }
+  .guide.cloud{ stroke-dasharray:6 7; transition:.25s; }
+  .stage.online .guide.cloud{ stroke:var(--fg); stroke-dasharray:6 7; opacity:.85; }
+
+  .node{ position:absolute; z-index:1; background:#fff; border:1px solid var(--border); border-radius:13px;
+    padding:9px 12px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .node .t{ font-size:13px; font-weight:600; display:flex; align-items:center; gap:7px; letter-spacing:-.01em; }
+  .node .s{ font-size:11px; color:var(--muted); margin-top:1px; }
+  .node.accent{ border-color:var(--fg); }
+  .badge{ position:absolute; top:-9px; right:-9px; min-width:22px; height:22px; padding:0 6px; border-radius:999px;
+    background:var(--fg); color:#fff; font-size:11.5px; font-weight:650; display:grid; place-items:center;
+    transform:scale(0); transition:transform .2s; }
+  .badge.show{ transform:scale(1); }
+
+  /* gate */
+  .gate{ position:absolute; z-index:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .gate .bars{ position:relative; width:34px; height:46px; }
+  .gate .bar{ position:absolute; top:0; width:4px; height:46px; background:var(--fg); border-radius:2px; transition:.3s; }
+  .gate .bar.l{ left:7px; } .gate .bar.r{ right:7px; }
+  .stage.online .gate .bar.l{ transform:translateX(-7px); opacity:.25; }
+  .stage.online .gate .bar.r{ transform:translateX(7px); opacity:.25; }
+  .gate .cap{ font-size:10px; font-weight:650; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; }
+  .stage.online .gate .cap{ color:var(--fg); }
+
+  /* dots */
+  .dot{ position:absolute; left:0; top:0; width:10px; height:10px; border-radius:999px; background:var(--fg);
+    z-index:2; offset-rotate:0deg; box-shadow:0 0 0 3px rgba(9,9,11,.08); }
+  .dot.hard{ border-radius:3px; }
+
+  .legend{ display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; color:var(--muted); font-size:12.5px; }
+  .legend b{ color:var(--fg); font-weight:600; }
+  .legend .k{ display:inline-flex; align-items:center; gap:7px; }
+  .legend .s1{ width:10px; height:10px; border-radius:999px; background:var(--fg); }
+  .legend .s2{ width:10px; height:10px; border-radius:3px; background:var(--fg); }
+  .legend .s3{ width:18px; height:0; border-top:2px dashed var(--fg); }
+  .note{ margin-top:14px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><span class="mark">🛶</span> Ferry</div>
+    <div class="spacer"></div>
+    <a href="/demo">Open the live demo →</a>
+  </div>
+  <p class="lede">Ferry sits between your chat and the models. Easy prompts are answered instantly on-device.
+  Hard ones wait in an on-device backlog — and the moment a connection window opens, they burst to Gemma 4 on
+  Cerebras in parallel and the answers stream straight back.</p>
+
+  <div class="status" id="status"><span class="led"></span><span id="statusText">Offline — backlog holding</span></div>
+
+  <div class="frame">
+    <div class="scaler">
+      <div class="stage" id="stage">
+        <svg class="lines" viewBox="0 0 920 480">
+          <!-- easy: you -> ferry -> on-device -> back to you -->
+          <path class="guide" d="M150,230 L352,228 C418,214 432,120 474,118 C302,58 150,116 138,214" />
+          <!-- hard in: you -> ferry -> backlog -->
+          <path class="guide" d="M150,232 L352,234 C432,300 442,330 470,330" />
+          <!-- cloud: backlog -> window -> cerebras -> back to you -->
+          <path class="guide cloud" d="M618,330 H700 H820 C700,424 252,432 120,250" />
+        </svg>
+
+        <div class="node" style="left:30px; top:202px; width:120px;">
+          <div class="t">👤 You</div><div class="s">phone · field</div>
+        </div>
+        <div class="node accent" style="left:232px; top:198px; width:140px;">
+          <div class="t">🛶 Ferry</div><div class="s">router · OpenAI-compatible</div>
+        </div>
+        <div class="node" style="left:476px; top:90px; width:170px;">
+          <div class="t">⚡ gemma4:e2b</div><div class="s">on-device · instant, offline</div>
+        </div>
+        <div class="node" id="backlogNode" style="left:470px; top:302px; width:150px;">
+          <div class="t">▤ Backlog</div><div class="s">SQLite · FIFO</div>
+          <div class="badge" id="backlogBadge">0</div>
+        </div>
+        <div class="gate" id="gate" style="left:684px; top:296px;">
+          <div class="bars"><div class="bar l"></div><div class="bar r"></div></div>
+          <div class="cap" id="gateCap">Closed</div>
+        </div>
+        <div class="node accent" style="left:760px; top:302px; width:150px;">
+          <div class="t">🟧 gemma-4-31b</div><div class="s">Cerebras · ~0.2s</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="k"><span class="s1"></span> <b>easy task</b> → answered on-device, instantly</span>
+    <span class="k"><span class="s2"></span> <b>hard task</b> → queued in the backlog</span>
+    <span class="k"><span class="s3"></span> <b>cloud route</b> → dashed when offline, live during a window</span>
+  </div>
+  <p class="note">Loops automatically. The connection window opens for a few seconds, drains the backlog to Cerebras in parallel, then closes — exactly the real behaviour.</p>
+</div>
+
+<script>
+const PATHS = {
+  easy:   "M150,230 L352,228 C418,214 432,120 474,118 C302,58 150,116 138,214",
+  hardin: "M150,232 L352,234 C432,300 442,330 470,330",
+  burst:  "M618,330 H700 H820 C700,424 252,432 120,250",
+};
+const stage = document.getElementById("stage");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+const gateCap = document.getElementById("gateCap");
+const badge = document.getElementById("backlogBadge");
+
+let online = false;
+let backlog = 0;
+let spawnHard = false;
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function setBadge(n){
+  badge.textContent = n;
+  badge.classList.toggle("show", n > 0);
+}
+
+function ride(kind, pathStr, dur){
+  const el = document.createElement("div");
+  el.className = "dot" + (kind === "hard" ? " hard" : "");
+  el.style.offsetPath = `path('${pathStr}')`;
+  el.style.offsetRotate = "0deg";
+  stage.appendChild(el);
+  const anim = el.animate(
+    [{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
+    { duration: dur, easing: "cubic-bezier(.45,.05,.55,.95)", fill: "forwards" }
+  );
+  return { el, anim };
+}
+
+// Easy tasks: a steady trickle, always instant on-device.
+function easyLoop(){
+  const { el, anim } = ride("easy", PATHS.easy, 2500);
+  anim.onfinish = () => el.remove();
+}
+setInterval(easyLoop, 1500);
+easyLoop();
+
+// Hard tasks arrive while offline and pile into the backlog.
+async function hardSpawner(){
+  while (true){
+    if (spawnHard){
+      const { el, anim } = ride("hard", PATHS.hardin, 1500);
+      anim.onfinish = () => { el.remove(); backlog++; setBadge(backlog); };
+    }
+    await sleep(900);
+  }
+}
+hardSpawner();
+
+function setOnline(v){
+  online = v;
+  stage.classList.toggle("online", v);
+  statusEl.classList.toggle("on", v);
+  gateCap.textContent = v ? "Open" : "Closed";
+}
+
+// The burst: every parked task fires to Cerebras in parallel, then returns.
+async function burst(){
+  const n = backlog;
+  statusText.textContent = n ? `Online — bursting ${n} to Cerebras` : "Online — window open";
+  for (let i = 0; i < n; i++){
+    setTimeout(() => {
+      const { el, anim } = ride("burst", PATHS.burst, 1700);
+      anim.onfinish = () => el.remove();
+    }, i * 130);
+    backlog--; setBadge(Math.max(0, backlog));
+  }
+  backlog = 0; setBadge(0);
+  // hold the window open long enough for the burst dots to land
+  await sleep(Math.max(1900, n * 130 + 1700));
+}
+
+// Main loop: offline (accumulate) -> online (burst) -> repeat.
+async function main(){
+  while (true){
+    setOnline(false);
+    statusText.textContent = "Offline — backlog holding";
+    spawnHard = true;
+    await sleep(4600);
+    spawnHard = false;
+    setOnline(true);
+    await burst();
+    await sleep(700);
+  }
+}
+main();
+
+// Scale the fixed-size stage down on narrow screens.
+function fit(){
+  const avail = document.querySelector(".frame").clientWidth;
+  const scale = Math.min(1, avail / 920);
+  stage.style.transform = `scale(${scale})`;
+  document.querySelector(".scaler").style.height = (480 * scale) + "px";
+}
+window.addEventListener("resize", fit); fit();
+</script>
+</body>
+</html>
