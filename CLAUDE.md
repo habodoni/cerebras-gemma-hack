@@ -22,7 +22,7 @@ you're working on.
 | **Local model** | `gemma4:e2b` (Ollama) | `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` — "Liquid" (Ollama) |
 | **Ferry** | `uvicorn` native | **systemd** `ferry.service` |
 | **Open WebUI** | native (pip), `--port 3000` | **Docker** container `open-webui`, `:3000` |
-| **Cloud model** | `gemma-4-31b` (→ `gpt-oss-120b` until preview opens) on Cerebras | same |
+| **Cloud model** | `gemma-4-31b` on Cerebras (`gpt-oss-120b` fallback) | same |
 | **"Window" control** | toggle Mac wifi, or `/demo/online` | `/demo/online` toggle (ethernet uplink later) |
 | **Config template** | `.env.example` | `.env.jetson.example` |
 | **Status** | built + verified on Mac | **deployed + verified live on the Jetson** |
@@ -53,8 +53,8 @@ before touching shared code.
 - **Ferry exposes 4 models:** `ferry` (auto-route), `ferry-local` (force local),
   `ferry-cloud` (force queue→burst), `ferry-agent` (Cerebras tool-calling with
   `web_search` via Exa + `run_code`/file-creation via E2B — see `ferry/tools.py`)
-- **Cloud:** target `gemma-4-31b`; currently `gpt-oss-120b` because the key has no Gemma 4
-  access until the hackathon preview opens. Flipping back is a one-line `.env` change.
+- **Cloud:** `gemma-4-31b` on Cerebras — the prize model, live and verified (~0.2s answers,
+  clean tool-calling). Needs Gemma 4 preview access on the key; `gpt-oss-120b` is the fallback.
 
 ## Run it (Mac)
 ```bash

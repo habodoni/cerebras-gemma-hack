@@ -70,19 +70,18 @@ shows `⏳ Queued` then bursts to Cerebras. Toggle the window with the dashboard
 - Local `gemma4:e2b` generates on-device.
 - The Jetson side is **live** end-to-end (Liquid local + Cerebras burst through Open WebUI).
 
-## Cloud model status (important for the prize)
-The shared key currently sees only `zai-glm-4.7` and `gpt-oss-120b` — **`gemma-4-31b` isn't
-live yet** (Gemma 4 preview opens during the hackathon). So Ferry bursts to `gpt-oss-120b`
-for now. The hackathon **requires Gemma 4** as the central model: the moment the key sees
-`gemma-4-31b`, set `CEREBRAS_MODEL=gemma-4-31b` in `.env` and restart. Keep checking.
+## Cloud model (the prize model)
+Ferry bursts to **`gemma-4-31b`** on Cerebras — live and verified (~0.2s answers, clean
+tool-calling). Your key needs Gemma 4 preview access; `gpt-oss-120b` is the fallback if a
+key lacks it. (`reasoning_effort=none` is omitted in `clients.py` because some fallback
+models reject it.)
 
 ## Open work (good places to start)
 - **Track 1 (the $2K prize): tools — DONE (v1).** The `ferry-agent` model runs a Cerebras
   tool-calling loop with `web_search` (Exa) and `run_code` (E2B sandbox — executes Python
   and creates files). See `ferry/tools.py` and `Clients.cerebras_agent`. Add `EXA_API_KEY`
   and `E2B_API_KEY` to `.env`. **Still open:** true multi-agent fan-out (parallel sub-agents
-  + synthesis), multimodal (image → Gemma 4 vision), and the output is cleaner on Gemma 4
-  than on the `gpt-oss-120b` stand-in (which leaks reasoning).
+  + synthesis) and multimodal (image → Gemma 4 vision). Output is clean on `gemma-4-31b`.
 - **Multimodal:** an image queued task → Gemma 4 vision on Cerebras (and `gemma4:e2b` is
   multimodal locally).
 - **Polish** the `/demo` and `/how` pages (black-and-white shadcn style — keep it minimal).
