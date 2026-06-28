@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ferry — What's Left</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#09090b; --muted:#71717a; --border:#e4e4e7;
+    --subtle:#f4f4f5; --subtle-2:#fafafa; --done:#a1a1aa;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--fg);
+    font:14.5px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:28px 20px 72px; }
+
+  header{ display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; }
+  h1{ font-size:22px; margin:0; letter-spacing:-.02em; display:flex; align-items:center; gap:9px; }
+  .sub{ color:var(--muted); font-size:13.5px; margin:4px 0 0; }
+  .spacer{ flex:1; }
+  .progress{ min-width:180px; }
+  .progress .bar{ height:8px; background:var(--subtle); border:1px solid var(--border);
+    border-radius:999px; overflow:hidden; }
+  .progress .fill{ height:100%; background:var(--fg); width:0%; transition:width .25s; }
+  .progress .lbl{ font-size:12px; color:var(--muted); margin-top:5px; text-align:right; }
+
+  .system{ border:1px solid var(--border); border-radius:14px; background:var(--subtle-2);
+    padding:14px 18px; margin:20px 0 24px; }
+  .system b{ font-weight:650; }
+  .system .flow{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px;
+    color:var(--fg); margin:8px 0 10px; }
+  .system .split{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:760px){ .system .split{ grid-template-columns:1fr; } }
+  .system .split div{ font-size:13px; color:var(--muted); }
+  .system .split b{ color:var(--fg); }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:860px){ .grid{ grid-template-columns:1fr; } }
+  .card{ border:1px solid var(--border); border-radius:16px; background:#fff; padding:6px 18px 16px; }
+  .card.full{ grid-column:1 / -1; }
+  .card h2{ font-size:15px; margin:16px 0 2px; display:flex; align-items:center; gap:9px; letter-spacing:-.01em; }
+  .card h2 .tag{ font-size:11px; font-weight:600; color:var(--muted); border:1px solid var(--border);
+    border-radius:999px; padding:2px 9px; }
+  .group{ font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--muted); margin:16px 0 6px; }
+
+  ul{ list-style:none; margin:0; padding:0; }
+  li{ display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--subtle); }
+  li:last-child{ border-bottom:0; }
+  input[type=checkbox]{ appearance:none; -webkit-appearance:none; width:18px; height:18px; margin:1px 0 0;
+    border:1.5px solid var(--fg); border-radius:5px; cursor:pointer; flex:none; position:relative; background:#fff; }
+  input[type=checkbox]:checked{ background:var(--fg); }
+  input[type=checkbox]:checked::after{ content:"✓"; color:#fff; font-size:12px; position:absolute;
+    left:2.5px; top:-1px; }
+  label{ cursor:pointer; }
+  .t{ font-weight:500; }
+  .n{ display:block; color:var(--muted); font-size:12.5px; margin-top:1px; }
+  li.checked .t{ color:var(--done); text-decoration:line-through; }
+  li.checked .n{ color:#cbced4; }
+
+  .done-note{ margin-top:26px; color:var(--muted); font-size:12.5px; }
+  .done-note summary{ cursor:pointer; font-weight:600; color:var(--fg); }
+  .done-note ul{ margin-top:8px; }
+  .done-note li{ border:0; padding:3px 0; }
+  .done-note li::before{ content:"✓"; color:var(--fg); font-weight:700; margin-right:8px; }
+  .reset{ background:#fff; border:1px solid var(--border); border-radius:8px; padding:6px 12px;
+    font-size:12.5px; cursor:pointer; color:var(--muted); }
+  .reset:hover{ border-color:var(--fg); color:var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🛶 Ferry — What's Left</h1>
+      <p class="sub">Remaining work, split by side. Tick items off — your progress is saved in this browser.</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="progress">
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <div class="lbl" id="plbl">0 / 0 done</div>
+    </div>
+  </header>
+
+  <div class="system">
+    <b>Same system on both sides.</b> The only difference is <i>where</i> the model and backlog live.
+    <div class="flow">Open WebUI → Ferry (router) → local model (now) · or queue → Cerebras burst (when online)</div>
+    <div class="split">
+      <div>🖥️ <b>Mac:</b> the model (<code>gemma4:e2b</code>) + backlog run <b>on the laptop itself</b>. The chat and the demo are all on one machine; the laptop's wifi is what flickers.</div>
+      <div>🤖 <b>Jetson:</b> the model (Liquid <code>LFM2.5-1.2B</code>) + backlog run <b>on the Jetson hub</b>. A weak client device connects to it over the <b>LAN / the Jetson's own WiFi hotspot</b>; the Jetson's uplink is what flickers.</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- MAC -->
+    <div class="card">
+      <h2>🖥️ Mac side <span class="tag">teammate</span></h2>
+
+      <div class="group">Setup</div>
+      <ul>
+        <li><input type="checkbox" id="m1"><label for="m1"><span class="t">Onboard on the Mac</span><span class="n">Follow HANDOFF.md: clone, Python 3.10–3.12 venv, <code>ollama pull gemma4:e2b</code>, run <code>uvicorn ferry.main:app</code>.</span></label></li>
+        <li><input type="checkbox" id="m2"><label for="m2"><span class="t">Open WebUI (native, Python 3.11)</span><span class="n">Own venv, <code>open-webui serve --port 3000</code>, Admin → Connections → <code>http://localhost:8080/v1</code> (key <code>ferry</code>), Ollama off.</span></label></li>
+        <li><input type="checkbox" id="m3"><label for="m3"><span class="t">Confirm both routes</span><span class="n">Short prompt → local <code>gemma4:e2b</code>; long/"analyze…" → queue → Cerebras burst in the same bubble.</span></label></li>
+      </ul>
+
+      <div class="group">Build (shared app code — primary dev)</div>
+      <ul>
+        <li><input type="checkbox" id="m4"><label for="m4"><span class="t">Multi-agent fan-out</span><span class="n">Decompose a hard task into parallel sub-agents (each searches/computes) + a synthesis step. Track 1 ceiling.</span></label></li>
+        <li><input type="checkbox" id="m5"><label for="m5"><span class="t">Multimodal path</span><span class="n">Image queued task → Gemma 4 vision on Cerebras (<code>gemma4:e2b</code> is multimodal locally too). Pick the one showcase image.</span></label></li>
+        <li><input type="checkbox" id="m6"><label for="m6"><span class="t">Polish /demo and /how</span><span class="n">Keep the minimal black-and-white shadcn style.</span></label></li>
+      </ul>
+
+      <div class="group">Demo</div>
+      <ul>
+        <li><input type="checkbox" id="m7"><label for="m7"><span class="t">Wifi-flicker laptop demo</span><span class="n">Toggle real wifi (or the dashboard window buttons) to show offline → queue → burst.</span></label></li>
+        <li><input type="checkbox" id="m8"><label for="m8"><span class="t">Record the ≤60s video</span><span class="n">Show Cerebras speed; a side-by-side vs a GPU provider is a plus. No keys/notifications on screen.</span></label></li>
+      </ul>
+    </div>
+
+    <!-- JETSON -->
+    <div class="card">
+      <h2>🤖 Jetson side <span class="tag">Ethan</span></h2>
+
+      <div class="group">Refresh the hub</div>
+      <ul>
+        <li><input type="checkbox" id="j1"><label for="j1"><span class="t">Pull latest + enable ferry-agent</span><span class="n"><code>git pull && .venv/bin/pip install -r requirements.txt</code>, add <code>EXA_API_KEY</code> + <code>E2B_API_KEY</code> to <code>.env</code>, <code>sudo systemctl restart ferry</code>.</span></label></li>
+        <li><input type="checkbox" id="j2"><label for="j2"><span class="t">Verify reboot resilience</span><span class="n">Reboot once; confirm Ferry (systemd) + Ollama + Open WebUI (Docker) all come back automatically.</span></label></li>
+      </ul>
+
+      <div class="group">Networking — "use it without wifi"</div>
+      <ul>
+        <li><input type="checkbox" id="j3"><label for="j3"><span class="t">Decide ethernet vs shared router</span><span class="n">Option A (Jetson is the WiFi hotspot, ethernet = uplink) needs a cable. Option B = Jetson + client on a travel router/phone hotspot.</span></label></li>
+        <li><input type="checkbox" id="j4"><label for="j4"><span class="t">Stand up the hotspot</span><span class="n">JETSON_DEPLOY.md → Step 3 (Networking). Option A: <code>nmcli device wifi hotspot …</code>; client joins SSID → <code>http://10.42.0.1:3000</code>.</span></label></li>
+        <li><input type="checkbox" id="j5"><label for="j5"><span class="t">Verify weak device → full loop</span><span class="n">A phone on the hotspot opens Open WebUI, gets a Liquid answer offline, queues a hard one, bursts when the window opens.</span></label></li>
+      </ul>
+
+      <div class="group">Client app</div>
+      <ul>
+        <li><input type="checkbox" id="j6"><label for="j6"><span class="t">Open WebUI as a PWA</span><span class="n">On the client device: open the Jetson's Open WebUI → "Add to Home Screen" → app icon, fullscreen.</span></label></li>
+      </ul>
+    </div>
+
+    <!-- SHARED -->
+    <div class="card full">
+      <h2>🤝 Both / Submission</h2>
+      <div class="grid" style="gap:0 22px; margin-top:4px;">
+        <div>
+          <div class="group">Model &amp; keys</div>
+          <ul>
+            <li><input type="checkbox" id="s1"><label for="s1"><span class="t">Flip to Gemma 4</span><span class="n">Currently on <code>gpt-oss-120b</code>. The prize requires Gemma 4 as the central model — set <code>CEREBRAS_MODEL=gemma-4-31b</code> the moment your key sees it, then restart. (Also cleans up agent output.)</span></label></li>
+            <li><input type="checkbox" id="s2"><label for="s2"><span class="t">Add teammates' Cerebras keys</span><span class="n">Comma-separated in <code>CEREBRAS_API_KEYS</code> → wider parallel burst (past one key's 100 RPM).</span></label></li>
+          </ul>
+        </div>
+        <div>
+          <div class="group">Submission</div>
+          <ul>
+            <li><input type="checkbox" id="s3"><label for="s3"><span class="t">Discord posts per track</span><span class="n">Track 1 #g4hackathon-multiverse-agents · Track 3 #g4hackathon-enterprise-impact. Separate post per track.</span></label></li>
+            <li><input type="checkbox" id="s4"><label for="s4"><span class="t">X post (Track 2)</span><span class="n">Post the demo video, tag <b>@Cerebras</b> and <b>@googlegemma</b>. Organic reach = the People's Choice prize.</span></label></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <details class="done-note">
+    <summary>Already done (for context)</summary>
+    <ul>
+      <li>Ferry core: auto router, SQLite FIFO backlog, connectivity watcher, parallel burst drainer, held-open SSE, Cerebras key pool</li>
+      <li>Three UIs: /demo, /how (animated diagram), /dashboard — black-and-white</li>
+      <li>Mac verified: 0.22s single call, 8 tasks burst in ~0.9s, held-open bubble</li>
+      <li>Jetson hub LIVE: Ollama+Liquid, Ferry (systemd), Open WebUI (Docker) wired to Ferry — local + burst confirmed</li>
+      <li>Handoff docs: CLAUDE.md, HANDOFF.md, JETSON_STARTUP.md, JETSON_DEPLOY.md (verified by adversarial review)</li>
+      <li>ferry-agent: Exa web_search + E2B run_code (code execution + file creation) — built, tested live, shipped</li>
+    </ul>
+    <p style="margin-top:14px;"><button class="reset" onclick="if(confirm('Clear all checkmarks?')){localStorage.clear();location.reload();}">Reset checklist</button></p>
+  </details>
+</div>
+
+<script>
+  const boxes = [...document.querySelectorAll('input[type=checkbox]')];
+  function refresh(){
+    let done = 0;
+    boxes.forEach(b => {
+      b.closest('li').classList.toggle('checked', b.checked);
+      if (b.checked) done++;
+    });
+    const pct = boxes.length ? Math.round(done / boxes.length * 100) : 0;
+    document.getElementById('fill').style.width = pct + '%';
+    document.getElementById('plbl').textContent = `${done} / ${boxes.length} done`;
+  }
+  boxes.forEach(b => {
+    b.checked = localStorage.getItem('ferry-todo:' + b.id) === '1';
+    b.addEventListener('change', () => {
+      localStorage.setItem('ferry-todo:' + b.id, b.checked ? '1' : '0');
+      refresh();
+    });
+  });
+  refresh();
+</script>
+</body>
+</html>
