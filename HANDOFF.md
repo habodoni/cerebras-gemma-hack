@@ -77,11 +77,12 @@ for now. The hackathon **requires Gemma 4** as the central model: the moment the
 `gemma-4-31b`, set `CEREBRAS_MODEL=gemma-4-31b` in `.env` and restart. Keep checking.
 
 ## Open work (good places to start)
-- **Track 1 (the $2K prize): Exa web-search + multi-agent burst.** Greenfield — `config.py`
-  reads `EXA_API_KEY` (add yours to `.env`), but the `web_search` tool, the Exa HTTP call,
-  and the Cerebras tool-definition aren't built yet (`httpx` is already a dep). Give the
-  burst a `web_search` tool (Gemma 4 tool-calling) and let a hard task fan into parallel
-  sub-agents that search + synthesize.
+- **Track 1 (the $2K prize): tools — DONE (v1).** The `ferry-agent` model runs a Cerebras
+  tool-calling loop with `web_search` (Exa) and `run_code` (E2B sandbox — executes Python
+  and creates files). See `ferry/tools.py` and `Clients.cerebras_agent`. Add `EXA_API_KEY`
+  and `E2B_API_KEY` to `.env`. **Still open:** true multi-agent fan-out (parallel sub-agents
+  + synthesis), multimodal (image → Gemma 4 vision), and the output is cleaner on Gemma 4
+  than on the `gpt-oss-120b` stand-in (which leaks reasoning).
 - **Multimodal:** an image queued task → Gemma 4 vision on Cerebras (and `gemma4:e2b` is
   multimodal locally).
 - **Polish** the `/demo` and `/how` pages (black-and-white shadcn style — keep it minimal).

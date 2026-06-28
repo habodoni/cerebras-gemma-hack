@@ -48,8 +48,10 @@ docker logs -f open-webui           # Open WebUI logs
 ## Common operations
 **Update Ferry code** (after the Mac side pushes changes):
 ```bash
-cd ~/cerebras-gemma-hack && git pull && sudo systemctl restart ferry
+cd ~/cerebras-gemma-hack && git pull && .venv/bin/pip install -r requirements.txt && sudo systemctl restart ferry
 ```
+> For the `ferry-agent` model (web_search + run_code), add `EXA_API_KEY` and
+> `E2B_API_KEY` to `.env` and restart.
 **Flip to Gemma 4** once your key has preview access (check with the model list below):
 ```bash
 curl -s https://api.cerebras.ai/v1/models -H "Authorization: Bearer $(grep -m1 CEREBRAS_API_KEYS ~/cerebras-gemma-hack/.env | cut -d= -f2 | cut -d, -f1)" | tr ',' '\n' | grep '"id"'

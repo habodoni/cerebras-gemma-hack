@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -98,6 +99,24 @@ async def chat_completions(request: Request):
         content = await _safe_local_complete(clients, messages, model)
         return JSONResponse(sse.completion(model, content))
 
+    # Agentic model: web_search (Exa) + run_code (E2B) via Cerebras tool-calling.
+    if model == "ferry-agent":
+        if request.app.state.watcher.is_online():
+            return StreamingResponse(
+                _stream_agent(clients, messages, model),
+                media_type="text/event-stream",
+            )
+        tid = uuid.uuid4().hex
+        queue = registry.register(tid)
+        await db.enqueue(
+            messages, route="agent", source="chat",
+            conversation=conversation, task_id=tid, agentic=True,
+        )
+        return StreamingResponse(
+            _stream_queued(tid, queue, model),
+            media_type="text/event-stream",
+        )
+
     # Decide the route (explicit model overrides win over the router).
     if model == "ferry-local":
         route, reason = "local", "model=ferry-local"
@@ -115,8 +134,6 @@ async def chat_completions(request: Request):
 
     # Cloud path: register the live queue BEFORE enqueue so the drainer can't
     # race ahead of us, then hold the SSE stream open.
-    import uuid
-
     tid = uuid.uuid4().hex
     queue = registry.register(tid)
     await db.enqueue(
@@ -152,6 +169,9 @@ async def _stream_queued(tid: str, queue: asyncio.Queue, model: str):
                 yield sse.heartbeat()
                 continue
             kind = item["type"]
+            if kind == "status":
+                yield sse.chunk(model, {"content": f"\n_{item['text']}_\n"})
+                continue
             if kind == "token":
                 if not started:
                     yield sse.chunk(model, {"content": "\n\n"})  # separate from placeholder
@@ -168,6 +188,21 @@ async def _stream_queued(tid: str, queue: asyncio.Queue, model: str):
                 return
     finally:
         registry.unregister(tid)
+
+
+async def _stream_agent(clients: Clients, messages: list[dict], model: str):
+    """Run the agentic tool-loop inline (online) and stream steps + answer."""
+    yield sse.chunk(model, {"role": "assistant"})
+    try:
+        async for kind, text in clients.cerebras_agent(messages):
+            if kind == "status":
+                yield sse.chunk(model, {"content": f"\n_{text}_\n\n"})
+            else:
+                yield sse.chunk(model, {"content": text})
+    except Exception as exc:  # noqa: BLE001
+        yield sse.chunk(model, {"content": f"\n\n[agent error: {exc}]"})
+    yield sse.chunk(model, {}, finish_reason="stop")
+    yield sse.DONE
 
 
 async def _safe_local_complete(clients: Clients, messages: list[dict], model: str) -> str:

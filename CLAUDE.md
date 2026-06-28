@@ -50,7 +50,9 @@ before touching shared code.
 
 ## Models & ports
 - **Ports:** Ferry `8080` · Open WebUI `3000` · Ollama `11434`
-- **Ferry exposes 3 models:** `ferry` (auto-route), `ferry-local` (force local), `ferry-cloud` (force queue→burst)
+- **Ferry exposes 4 models:** `ferry` (auto-route), `ferry-local` (force local),
+  `ferry-cloud` (force queue→burst), `ferry-agent` (Cerebras tool-calling with
+  `web_search` via Exa + `run_code`/file-creation via E2B — see `ferry/tools.py`)
 - **Cloud:** target `gemma-4-31b`; currently `gpt-oss-120b` because the key has no Gemma 4
   access until the hackathon preview opens. Flipping back is a one-line `.env` change.
 

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     error         TEXT,
     route         TEXT,            -- why it was queued (router decision)
     source        TEXT,            -- chat | seed
+    agentic       INTEGER DEFAULT 0,  -- 1 = run the web_search/run_code tool loop
     attempts      INTEGER DEFAULT 0,
     created_at    TEXT,
     sent_at       TEXT,
@@ -51,6 +52,12 @@ async def init() -> None:
     await _db.execute("PRAGMA synchronous=NORMAL;")
     await _db.executescript(SCHEMA)
     await _db.commit()
+    # Migrate DBs created before the agentic column existed.
+    try:
+        await _db.execute("ALTER TABLE tasks ADD COLUMN agentic INTEGER DEFAULT 0")
+        await _db.commit()
+    except Exception:
+        pass  # column already exists
     # Recover anything left mid-flight by a previous crash/window-close.
     await _db.execute(
         "UPDATE tasks SET status='queued' WHERE status='sending'"
@@ -71,6 +78,7 @@ async def enqueue(
     conversation: str | None = None,
     priority: int = 5,
     task_id: str | None = None,
+    agentic: bool = False,
 ) -> str:
     """Insert a queued task and return its id."""
     assert _db is not None
@@ -80,8 +88,8 @@ async def enqueue(
     await _db.execute(
         """INSERT INTO tasks
            (id, conversation, prompt, messages, priority, est_tokens, status,
-            route, source, created_at)
-           VALUES (?,?,?,?,?,?, 'queued', ?,?,?)""",
+            route, source, agentic, created_at)
+           VALUES (?,?,?,?,?,?, 'queued', ?,?,?,?)""",
         (
             tid,
             conversation,
@@ -91,6 +99,7 @@ async def enqueue(
             est,
             route,
             source,
+            1 if agentic else 0,
             now_iso(),
         ),
     )

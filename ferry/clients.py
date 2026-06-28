@@ -101,6 +101,90 @@ class Clients:
         if last_exc is not None:
             raise last_exc
 
+    async def cerebras_agent(self, messages: list[dict]) -> AsyncIterator[tuple]:
+        """Agentic tool-calling loop on Cerebras.
+
+        Yields (kind, text): kind is 'status' for a tool step (shown to the user)
+        or 'token' for answer text. The model may call web_search / run_code over
+        several rounds before producing a final answer.
+        """
+        from . import tools as toolmod
+
+        if not self.has_cerebras_key:
+            raise RuntimeError("No CEREBRAS_API_KEYS configured")
+        convo = [dict(m) for m in messages]
+        if not any(m.get("role") == "system" for m in convo):
+            convo.insert(0, {"role": "system", "content": _AGENT_SYSTEM})
+        for _ in range(settings.agent_max_steps):
+            key = self._next_key()
+            payload = {
+                "model": settings.cerebras_model,
+                "messages": convo,
+                "tools": toolmod.TOOLS,
+                "tool_choice": "auto",
+                "max_tokens": settings.cerebras_max_tokens,
+            }
+            resp = await self.cerebras.post(
+                "/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {key}"},
+            )
+            resp.raise_for_status()
+            msg = resp.json()["choices"][0]["message"]
+            tool_calls = msg.get("tool_calls")
+            if not tool_calls:
+                content = msg.get("content") or ""
+                if content:
+                    yield ("token", content)
+                return
+            convo.append({
+                "role": "assistant",
+                "content": msg.get("content") or "",
+                "tool_calls": tool_calls,
+            })
+            for tc in tool_calls:
+                fn = (tc.get("function") or {}).get("name", "")
+                raw_args = (tc.get("function") or {}).get("arguments", "{}")
+                yield ("status", _tool_label(fn, raw_args))
+                result = await toolmod.call_tool(fn, raw_args)
+                convo.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id"),
+                    "content": result,
+                })
+        # Step budget exhausted — one final answer with no more tools.
+        key = self._next_key()
+        resp = await self.cerebras.post(
+            "/chat/completions",
+            json={
+                "model": settings.cerebras_model,
+                "messages": convo,
+                "max_tokens": settings.cerebras_max_tokens,
+            },
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        if resp.status_code == 200:
+            yield ("token", resp.json()["choices"][0]["message"].get("content") or "")
+
+
+_AGENT_SYSTEM = (
+    "You are Ferry's agent. Use web_search for current facts and run_code to "
+    "compute or create files. Call tools only when needed, then give a clear, "
+    "direct final answer for the user. Do not narrate your tool use or think out loud."
+)
+
+
+def _tool_label(name: str, raw_args) -> str:
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+    except (json.JSONDecodeError, TypeError):
+        args = {}
+    if name == "web_search":
+        return f"🔍 searching: {str(args.get('query', ''))[:80]}"
+    if name == "run_code":
+        return "🐍 running code"
+    return f"🔧 {name}"
+
 
 async def _iter_sse_content(resp: httpx.Response) -> AsyncIterator[str]:
     """Yield the `delta.content` string from each OpenAI SSE line."""

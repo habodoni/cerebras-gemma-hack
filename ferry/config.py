@@ -32,6 +32,10 @@ class Settings:
 
     # Web search tool (Exa) — used by burst sub-agents that need live info.
     exa_api_key: str = os.getenv("EXA_API_KEY", "")
+    # Code execution sandbox (E2B) — run code / create files mid-answer.
+    e2b_api_key: str = os.getenv("E2B_API_KEY", "")
+    # Max tool-calling rounds in the agentic burst.
+    agent_max_steps: int = int(os.getenv("AGENT_MAX_STEPS", "6"))
 
     # Router: heuristic | llm | always_cloud | always_local
     router_mode: str = os.getenv("ROUTER_MODE", "heuristic")
@@ -62,7 +66,7 @@ class Settings:
     @property
     def service_models(self) -> list[str]:
         # Primary auto-routing model, plus escape hatches for demo control.
-        return ["ferry", "ferry-local", "ferry-cloud"]
+        return ["ferry", "ferry-local", "ferry-cloud", "ferry-agent"]
 
 
 settings = Settings()

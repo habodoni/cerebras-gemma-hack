@@ -61,9 +61,17 @@ class BurstDrainer:
         await db.mark_sending(tid)
         try:
             full = []
-            async for delta in self.clients.cerebras_stream(messages):
-                full.append(delta)
-                await registry.push(tid, {"type": "token", "text": delta})
+            if task.get("agentic"):
+                async for kind, text in self.clients.cerebras_agent(messages):
+                    if kind == "status":
+                        await registry.push(tid, {"type": "status", "text": text})
+                    else:
+                        full.append(text)
+                        await registry.push(tid, {"type": "token", "text": text})
+            else:
+                async for delta in self.clients.cerebras_stream(messages):
+                    full.append(delta)
+                    await registry.push(tid, {"type": "token", "text": delta})
             answer = "".join(full)
             await db.mark_done(tid, answer)
             await registry.push(tid, {"type": "done"})
