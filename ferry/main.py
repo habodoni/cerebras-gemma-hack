@@ -28,8 +28,8 @@ from fastapi.responses import (
     StreamingResponse,
 )
 
-from . import db, registry, router, sse
-from .clients import Clients
+from . import db, notify, registry, router, sse
+from .clients import Clients, compact_cloud_messages
 from .config import settings
 from .drainer import BurstDrainer
 from .watcher import ConnectivityWatcher
@@ -111,6 +111,11 @@ async def chat_completions(request: Request):
             media_type="text/event-stream",
         )
 
+    # Cloud path: trim the (possibly huge) Open WebUI history once here so every
+    # downstream call — router, inline agent, queued drain, and each orchestrator
+    # worker — inherits a bounded payload that fits Cerebras's token budget.
+    messages = compact_cloud_messages(messages)
+
     cloud_mode, cloud_reason = await router.decide_cloud_mode(clients, messages)
     internal_route = f"{cloud_mode}: {cloud_reason}"
     log.info("cloud_mode=%s (%s)", cloud_mode, cloud_reason)
@@ -134,6 +139,9 @@ async def chat_completions(request: Request):
         task_id=tid,
         agentic=True,
     )
+    # Fire-and-forget: ping the user that this one is parked until a window opens.
+    backlog = (await db.counts()).get("queued", 0)
+    asyncio.create_task(notify.queued(backlog))
     return StreamingResponse(
         _stream_queued(tid, queue, model),
         media_type="text/event-stream",

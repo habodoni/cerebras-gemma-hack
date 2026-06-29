@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import AsyncIterator
 
 import httpx
 
 from .config import settings
+
+log = logging.getLogger("ferry.clients")
 
 
 class Clients:
@@ -132,7 +135,7 @@ class Clients:
                 convo.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id"),
-                    "content": str(result),
+                    "content": str(result)[:_TOOL_RESULT_CHARS],
                 })
         # Step budget exhausted — one final answer with no more tools.
         data = await self._post_cerebras_completion(self._cerebras_payload(convo))
@@ -150,7 +153,7 @@ class Clients:
         events: asyncio.Queue = asyncio.Queue()
         results: list[dict | None] = [None] * len(agents)
         tasks = [
-            asyncio.create_task(self._run_multiverse_agent(i, agent, messages, events))
+            asyncio.create_task(self._run_multiverse_agent(i, agent, events))
             for i, agent in enumerate(agents)
         ]
         remaining = len(tasks)
@@ -193,7 +196,11 @@ class Clients:
 
     async def _post_cerebras_completion(self, payload: dict) -> dict:
         last_exc: Exception | None = None
-        for _ in range(max(1, len(settings.cerebras_api_keys))):
+        # Try every key, plus a few extra rounds so a transient per-minute token
+        # quota (429) can be ridden out with backoff instead of failing instantly.
+        attempts = max(1, len(settings.cerebras_api_keys)) + 3
+        backoff = 1.5
+        for _ in range(attempts):
             key = self._next_key()
             try:
                 resp = await self.cerebras.post(
@@ -202,9 +209,19 @@ class Clients:
                     headers={"Authorization": f"Bearer {key}"},
                 )
                 if resp.status_code == 429:
-                    last_exc = RuntimeError("All Cerebras keys were rate-limited")
+                    # Per-minute token/request quota. Another key may have budget;
+                    # otherwise wait for the window to refill, then retry.
+                    last_exc = RuntimeError(f"Cerebras rate/token limit: {resp.text[:200]}")
+                    log.warning("Cerebras 429; backing off %.1fs", backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 8.0)
                     continue
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    body = resp.text[:1000]
+                    log.error("Cerebras %s: %s", resp.status_code, body)
+                    # Other 4xx are bad requests (e.g. context too long) — another
+                    # key won't fix it, so fail fast with the real reason.
+                    raise RuntimeError(f"Cerebras {resp.status_code}: {body}")
                 return resp.json()
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
                 last_exc = exc
@@ -241,7 +258,6 @@ class Clients:
         self,
         idx: int,
         agent: dict,
-        messages: list[dict],
         events: asyncio.Queue,
     ) -> None:
         name = agent["name"]
@@ -249,7 +265,7 @@ class Clients:
         try:
             chunks = []
             async for kind, text in self.cerebras_agent(
-                _subagent_messages(messages, agent),
+                _subagent_messages(agent),
                 system_prompt=_subagent_system(name),
             ):
                 if kind == "status":
@@ -316,20 +332,23 @@ _ARTIFACT_ACTIONS = (
 )
 
 _MULTIVERSE_PLANNER_SYSTEM = (
-    "You split a user request into parallel specialist agents. Return only JSON "
-    "with this shape: {\"agents\":[{\"name\":\"Researcher\",\"task\":\"...\"}]}. "
-    "Use short names and concrete, non-overlapping tasks. Include search, code, "
-    "or verification work only when useful."
+    "You are the orchestrator. Break the user's request into parallel specialist "
+    "sub-agents. Each sub-agent runs in ISOLATION and cannot see the conversation, "
+    "so every task must be fully self-contained: restate the context it needs, the "
+    "specific question to answer, and exactly what to return. Return only JSON of "
+    "the shape {\"agents\":[{\"name\":\"Researcher\",\"task\":\"...\"}]}. Use short "
+    "names and concrete, non-overlapping tasks. Include search, code, or "
+    "verification work only when it materially helps."
 )
 
 _MULTIVERSE_SYNTHESIS_SYSTEM = (
-    "You are Ferry's synthesis agent. Combine parallel sub-agent findings into "
-    "one clear final answer. Prefer direct answers over process notes. Cite URLs "
-    "when the findings include them, mention calculations or files that matter, "
-    "preserve any file download URLs exactly, "
-    "and call out uncertainty or missing tool access briefly. Tools are available; "
-    "call web_search or run_code only if the sub-agent findings need verification "
-    "or a final computation."
+    "You are the orchestrator. You guided parallel sub-agents and now own the final "
+    "answer. Critically review their findings: reconcile conflicts, correct errors, "
+    "and fill gaps. Tools are available — call web_search or run_code yourself to "
+    "verify a doubtful claim, finish a missing computation, or generate a requested "
+    "file. Then write one clear, direct final answer for the user. Cite URLs when "
+    "the findings include them, preserve any file download URLs exactly, and briefly "
+    "flag any remaining uncertainty. Prefer a direct answer over process notes."
 )
 
 
@@ -423,22 +442,25 @@ def _subagent_system(name: str) -> str:
     )
 
 
-def _subagent_messages(messages: list[dict], agent: dict) -> list[dict]:
-    out = [dict(m) for m in messages]
-    out.append({
+def _subagent_messages(agent: dict) -> list[dict]:
+    # Workers run in isolation: they receive ONLY their self-contained instruction,
+    # never the chat history. The orchestrator's planner bakes all needed context
+    # into the task, which keeps each worker's payload tiny.
+    return [{
         "role": "user",
         "content": (
-            f"Sub-agent assignment: {agent['task']}\n\n"
-            "Work only on this slice. Return concise findings, evidence, URLs, "
-            "calculations, code results, and file download URLs if relevant."
+            f"{agent['task']}\n\n"
+            "Complete only this assignment. Use web_search for current facts and "
+            "run_code for computation or file creation when they materially help. "
+            "Return concise findings: key facts, evidence, URLs, numbers, code "
+            "results, and any file download URLs. Do not write the user's final answer."
         ),
-    })
-    return out
+    }]
 
 
 def _multiverse_synthesis_messages(messages: list[dict], results: list[dict]) -> list[dict]:
     findings = "\n\n".join(
-        f"## {r['name']}\nAssigned task: {r['task']}\nFindings:\n{r['content']}"
+        f"## {r['name']}\nAssigned task: {r['task']}\nFindings:\n{r['content'][:_FINDINGS_CHARS]}"
         for r in results
     )
     return [
@@ -512,6 +534,30 @@ def _fallback_agents(messages: list[dict], max_agents: int) -> list[dict]:
         {"name": name, "task": f"{task}\n\nUser request: {request}"}
         for name, task in templates[:max_agents]
     ]
+
+
+# Open WebUI forwards the entire multi-turn chat (including prior long answers)
+# on every request. gemma-4-31b allows 131k context but only ~100k tokens/minute,
+# and a multi-agent turn fans that history out across several concurrent calls —
+# so trim it once at the API boundary before it reaches Cerebras.
+_CLOUD_KEEP_MESSAGES = 8
+_CLOUD_MSG_CHARS = 6000
+_TOOL_RESULT_CHARS = 6000
+_FINDINGS_CHARS = 2500
+
+
+def compact_cloud_messages(messages: list[dict]) -> list[dict]:
+    """Cap chat-history length/size before bursting it to Cerebras."""
+    system = [m for m in messages if m.get("role") == "system"]
+    rest = [m for m in messages if m.get("role") != "system"][-_CLOUD_KEEP_MESSAGES:]
+    out: list[dict] = []
+    for m in system + rest:
+        nm = dict(m)
+        content = m.get("content")
+        if isinstance(content, str) and len(content) > _CLOUD_MSG_CHARS:
+            nm["content"] = content[:_CLOUD_MSG_CHARS] + "\n…[truncated]"
+        out.append(nm)
+    return out
 
 
 def _format_messages(messages: list[dict], limit: int) -> str:

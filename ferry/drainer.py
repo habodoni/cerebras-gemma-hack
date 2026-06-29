@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 
-from . import db, registry
+from . import db, notify, registry
 from .config import settings
 from .watcher import ConnectivityWatcher
 
@@ -78,6 +78,9 @@ class BurstDrainer:
             await db.mark_done(tid, answer)
             await registry.push(tid, {"type": "done"})
             log.info("Delivered task %s (%d chars)", tid[:8], len(answer))
+            # Notify only real user prompts — not demo/seed backlog tasks.
+            if task.get("source") == "chat":
+                asyncio.create_task(notify.returned(answer))
         except Exception as exc:  # noqa: BLE001 - drainer must never crash the loop
             outcome = await db.requeue_or_fail(tid, str(exc))
             log.warning("Task %s failed (%s) -> %s", tid[:8], exc, outcome)

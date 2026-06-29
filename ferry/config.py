@@ -80,6 +80,13 @@ class Settings:
     )
     heartbeat_interval: float = float(os.getenv("HEARTBEAT_INTERVAL", "10.0"))
 
+    # Notifications on queue + return. none | macos | ntfy.
+    #   macos → native notification on the machine running Ferry (Mac laptop flow)
+    #   ntfy  → HTTP push to a topic, reaches your phone from the headless Jetson hub
+    notify_mode: str = os.getenv("NOTIFY_MODE", "none")
+    ntfy_server: str = os.getenv("NTFY_SERVER", "https://ntfy.sh")
+    ntfy_topic: str = os.getenv("NTFY_TOPIC", "")
+
     @property
     def service_models(self) -> list[str]:
         # Open WebUI should show one model; Ferry does all routing internally.
