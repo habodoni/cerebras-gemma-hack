@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -143,7 +144,7 @@ async def chat_completions(request: Request):
     backlog = (await db.counts()).get("queued", 0)
     asyncio.create_task(notify.queued(backlog))
     return StreamingResponse(
-        _stream_queued(tid, queue, model),
+        _stream_queued(tid, queue, model, position=backlog),
         media_type="text/event-stream",
     )
 
@@ -169,10 +170,28 @@ async def _stream_local(clients: Clients, messages: list[dict], model: str):
     yield sse.DONE
 
 
-async def _stream_queued(tid: str, queue: asyncio.Queue, model: str):
-    """Hold the bubble open: placeholder now, Cerebras answer when it lands."""
+def _queue_receipt(position: int) -> str:
+    """The backlog receipt shown the instant a hard prompt is parked."""
+    pos = f" · **#{position}** in the on-device backlog" if position else ""
+    return (
+        f"⏳ **Queued**{pos}\n\n"
+        "This one needs the big model, so Ferry is holding it **on-device** until a "
+        "connection window opens — then it bursts to **Gemma 4 on Cerebras** and the "
+        "answer streams right back into this message. You can close the app; you'll "
+        "get a notification when it lands."
+    )
+
+
+def _fmt_wait(seconds: float) -> str:
+    s = int(seconds)
+    return f"{s}s" if s < 60 else f"{s // 60}m {s % 60:02d}s"
+
+
+async def _stream_queued(tid: str, queue: asyncio.Queue, model: str, position: int = 0):
+    """Hold the bubble open: a backlog receipt now, the Cerebras answer when it lands."""
+    t0 = time.monotonic()
     yield sse.chunk(model, {"role": "assistant"})
-    yield sse.chunk(model, {"content": settings.placeholder_text})
+    yield sse.chunk(model, {"content": _queue_receipt(position)})
     started = False
     try:
         while True:
@@ -187,7 +206,11 @@ async def _stream_queued(tid: str, queue: asyncio.Queue, model: str):
                 continue
             if kind == "token":
                 if not started:
-                    yield sse.chunk(model, {"content": "\n\n"})  # separate from placeholder
+                    waited = _fmt_wait(time.monotonic() - t0)
+                    yield sse.chunk(model, {"content": (
+                        f"\n\n---\n📡 **Connection window open** — bursted to Gemma 4 on "
+                        f"Cerebras after **{waited}** in the backlog.\n\n"
+                    )})
                     started = True
                 yield sse.chunk(model, {"content": item["text"]})
             elif kind == "done":
