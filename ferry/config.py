@@ -31,9 +31,13 @@ class Settings:
     cerebras_api_keys: list[str] = field(
         default_factory=lambda: _split(os.getenv("CEREBRAS_API_KEYS", ""))
     )
-    cerebras_max_tokens: int = int(os.getenv("CEREBRAS_MAX_TOKENS", "1024"))
+    cerebras_max_tokens: int = int(os.getenv("CEREBRAS_MAX_TOKENS", "8192"))
     # none | low | medium | high — reasoning is off by default on Gemma 4.
+    # Voice/Hands (tool loops, final answer) use this global default (none).
     cerebras_reasoning_effort: str = os.getenv("CEREBRAS_REASONING_EFFORT", "none")
+    # Brain steps (multiverse planner + synthesis) reason at this effort. Reasoning
+    # consumes output tokens, so cerebras_max_tokens must stay generous (>=512).
+    cerebras_think_effort: str = os.getenv("CEREBRAS_THINK_EFFORT", "medium")
 
     # Web search tool (Exa) — used by burst sub-agents that need live info.
     exa_api_key: str = os.getenv("EXA_API_KEY", "")

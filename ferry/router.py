@@ -8,22 +8,43 @@ No user toggle — Ferry decides. Modes:
 """
 from __future__ import annotations
 
+import re
+
 from .config import settings
 from .db import _last_user_text
 
-# Signals that a prompt likely wants the big model.
+# Bulk-repetition requests ("say hi 200 times") want long output — cloud, even
+# though the prompt is short. Two+ digits avoids "3 times a day"; the lookahead
+# avoids multiplication ("17 times 4"), which a local model should just answer.
+_BULK_REPEAT = re.compile(r"\b\d{2,}\s*times\b(?!\s*\d)")
+
+# Signals a prompt likely needs the big cloud model — either it needs tools
+# (search / files / compute) or it's long-form, multi-step reasoning. Pure-language
+# tasks (translate, a short story, a poem) are deliberately NOT here so the local
+# edge model keeps them — that is the local-first promise. Bare "code"/"generate"
+# were also dropped: too substring-matchy ("decode", "generation") and too broad.
 HARD_KEYWORDS = (
     "analyze", "analysis", "research", "compare", "comprehensive", "in depth",
     "in-depth", "detailed", "write a", "draft", "essay", "report", "plan",
     "design", "architect", "debug", "refactor", "optimi", "prove", "derive",
-    "explain why", "step by step", "step-by-step", "summarize this", "translate",
-    "code", "algorithm", "strategy", "evaluate", "pros and cons", "search",
+    "explain why", "step by step", "step-by-step", "summarize this",
+    "algorithm", "strategy", "evaluate", "pros and cons", "search",
     "web", "current", "latest", "today", "recent", "news", "calculate",
-    "compute", "run code", "create a file", "csv", "generate", "story", "poem",
-    "repeat", "many times", "exactly", "pptx", "powerpoint", "presentation",
-    "slide deck", "slides", "deck", "docx", "xlsx", "spreadsheet", "pdf",
-    "gif", "animation", "animated", "visualization", "png", "image", "svg",
-    "mp4", "video", "cerebras",
+    "compute", "run code", "create a file", "csv", "pptx", "powerpoint",
+    "presentation", "slide deck", "slides", "deck", "docx", "xlsx",
+    "spreadsheet", "pdf", "gif", "animation", "animated", "visualization",
+    "png", "image", "svg", "mp4", "video", "cerebras",
+)
+
+# Explicit, plain-language route overrides — let a user steer Ferry directly.
+FORCE_CLOUD_PHRASES = (
+    "use cerebras", "use the cloud", "use cloud", "via cerebras", "on cerebras",
+    "@cloud", "@cerebras", "force cloud", "burst this", "use gemma 4",
+    "use the big model",
+)
+FORCE_LOCAL_PHRASES = (
+    "use local", "stay local", "use the local model", "@local", "on device",
+    "on-device", "keep it local", "answer locally",
 )
 
 MULTI_AGENT_KEYWORDS = (
@@ -59,11 +80,23 @@ AGENT_ROUTER_SYSTEM = (
 )
 
 
+def explicit_override(messages: list[dict]) -> tuple[str, str] | None:
+    """Honor a user who states the route in plain language ('use cerebras')."""
+    text = _last_user_text(messages).lower()
+    if any(p in text for p in FORCE_CLOUD_PHRASES):
+        return "cloud", "user override: cloud"
+    if any(p in text for p in FORCE_LOCAL_PHRASES):
+        return "local", "user override: local"
+    return None
+
+
 def heuristic_route(messages: list[dict]) -> tuple[str, str]:
     text = _last_user_text(messages)
     lowered = text.lower()
     if len(text) >= settings.router_length_threshold:
         return "cloud", f"heuristic: long prompt ({len(text)} chars)"
+    if _BULK_REPEAT.search(lowered):
+        return "cloud", "heuristic: bulk repetition"
     for kw in HARD_KEYWORDS:
         if kw in lowered:
             return "cloud", f"heuristic: keyword '{kw}'"
@@ -72,6 +105,10 @@ def heuristic_route(messages: list[dict]) -> tuple[str, str]:
 
 async def decide(clients, messages: list[dict]) -> tuple[str, str]:
     """Return (route, reason) where route is 'local' or 'cloud'."""
+    # A user who explicitly asks for a route wins over everything else.
+    override = explicit_override(messages)
+    if override is not None:
+        return override
     mode = settings.router_mode
     if mode == "always_local":
         return "local", "forced local"

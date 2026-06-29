@@ -69,13 +69,21 @@ class Clients:
 
     # ----- Cloud (Cerebras) ----------------------------------------------
     async def cerebras_agent(
-        self, messages: list[dict], system_prompt: str | None = None
+        self,
+        messages: list[dict],
+        system_prompt: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AsyncIterator[tuple]:
         """Agentic tool-calling loop on Cerebras.
 
         Yields (kind, text): kind is 'status' for a tool step (shown to the user)
         or 'token' for answer text. The model may call web_search / run_code over
-        several rounds before producing a final answer.
+        several rounds before producing a final answer. `reasoning_effort` lets a
+        BRAIN caller (planner/synthesis) turn on Gemma reasoning; tool/voice loops
+        leave it None (the global default, none).
+
+        All run_code calls in this run share ONE E2B sandbox (state + installed
+        packages persist between steps); it is killed once when the run ends.
         """
         from . import tools as toolmod
 
@@ -90,56 +98,63 @@ class Clients:
         force_web_search = force_run_code and _requests_web_search(messages)
         ran_code = False
         ran_search = False
-        for _ in range(settings.agent_max_steps):
-            if force_web_search and not ran_search:
-                tool_choice = _WEB_SEARCH_TOOL_CHOICE
-            elif force_run_code and not ran_code:
-                tool_choice = _RUN_CODE_TOOL_CHOICE
-            else:
-                tool_choice = "auto"
-            payload = self._cerebras_payload(
-                convo,
-                tools=toolmod.TOOLS,
-                tool_choice=tool_choice,
-            )
-            msg = (await self._post_cerebras_completion(payload))["choices"][0]["message"]
-            tool_calls = msg.get("tool_calls")
-            if not tool_calls:
-                content = msg.get("content") or ""
-                if content:
-                    yield ("token", content)
-                return
-            convo.append({
-                "role": "assistant",
-                "content": msg.get("content") or "",
-                "tool_calls": tool_calls,
-            })
-            tool_tasks = []
-            for tc in tool_calls:
-                fn = (tc.get("function") or {}).get("name", "")
-                raw_args = (tc.get("function") or {}).get("arguments", "{}")
-                if fn == "run_code":
-                    ran_code = True
-                elif fn == "web_search":
-                    ran_search = True
-                yield ("status", _tool_label(fn, raw_args))
-                task = asyncio.create_task(toolmod.call_tool(fn, raw_args))
-                tool_tasks.append((tc, fn, task))
-            results = await asyncio.gather(
-                *(task for _, _, task in tool_tasks),
-                return_exceptions=True,
-            )
-            for (tc, fn, _), result in zip(tool_tasks, results):
-                if isinstance(result, Exception):
-                    result = f"[tool {fn} error: {result}]"
+        session = toolmod.CodeSession()
+        try:
+            for _ in range(settings.agent_max_steps):
+                if force_web_search and not ran_search:
+                    tool_choice = _WEB_SEARCH_TOOL_CHOICE
+                elif force_run_code and not ran_code:
+                    tool_choice = _RUN_CODE_TOOL_CHOICE
+                else:
+                    tool_choice = "auto"
+                payload = self._cerebras_payload(
+                    convo,
+                    reasoning_effort=reasoning_effort,
+                    tools=toolmod.TOOLS,
+                    tool_choice=tool_choice,
+                )
+                msg = (await self._post_cerebras_completion(payload))["choices"][0]["message"]
+                tool_calls = msg.get("tool_calls")
+                if not tool_calls:
+                    content = msg.get("content") or ""
+                    if content:
+                        yield ("token", content)
+                    return
                 convo.append({
-                    "role": "tool",
-                    "tool_call_id": tc.get("id"),
-                    "content": str(result)[:_TOOL_RESULT_CHARS],
+                    "role": "assistant",
+                    "content": msg.get("content") or "",
+                    "tool_calls": tool_calls,
                 })
-        # Step budget exhausted — one final answer with no more tools.
-        data = await self._post_cerebras_completion(self._cerebras_payload(convo))
-        yield ("token", data["choices"][0]["message"].get("content") or "")
+                tool_tasks = []
+                for tc in tool_calls:
+                    fn = (tc.get("function") or {}).get("name", "")
+                    raw_args = (tc.get("function") or {}).get("arguments", "{}")
+                    if fn == "run_code":
+                        ran_code = True
+                    elif fn == "web_search":
+                        ran_search = True
+                    yield ("status", _tool_label(fn, raw_args))
+                    task = asyncio.create_task(toolmod.call_tool(fn, raw_args, session=session))
+                    tool_tasks.append((tc, fn, task))
+                results = await asyncio.gather(
+                    *(task for _, _, task in tool_tasks),
+                    return_exceptions=True,
+                )
+                for (tc, fn, _), result in zip(tool_tasks, results):
+                    if isinstance(result, Exception):
+                        result = f"[tool {fn} error: {result}]"
+                    convo.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id"),
+                        "content": str(result)[:_TOOL_RESULT_CHARS],
+                    })
+            # Step budget exhausted — one final answer with no more tools.
+            data = await self._post_cerebras_completion(
+                self._cerebras_payload(convo, reasoning_effort=reasoning_effort)
+            )
+            yield ("token", data["choices"][0]["message"].get("content") or "")
+        finally:
+            await session.close()
 
     async def cerebras_multiverse(self, messages: list[dict]) -> AsyncIterator[tuple]:
         """Parallel sub-agents with tools, followed by a synthesis answer."""
@@ -174,21 +189,27 @@ class Clients:
 
         completed = [r for r in results if r is not None]
         yield ("status", "synthesizing final answer")
+        # BRAIN: let the orchestrator reason while it reconciles + synthesizes.
         async for kind, text in self.cerebras_agent(
-            _multiverse_synthesis_messages(messages, completed)
+            _multiverse_synthesis_messages(messages, completed),
+            reasoning_effort=settings.cerebras_think_effort,
         ):
             yield (kind, text)
 
-    def _cerebras_payload(self, messages: list[dict], **extra) -> dict:
+    def _cerebras_payload(
+        self, messages: list[dict], reasoning_effort: str | None = None, **extra
+    ) -> dict:
         payload = {
             "model": settings.cerebras_model,
             "messages": messages,
             "max_tokens": settings.cerebras_max_tokens,
         }
+        # Per-call reasoning: BRAIN steps (planner/synthesis) pass an explicit
+        # effort (e.g. medium); everything else falls back to the global default.
         # Gemma 4 accepts reasoning_effort="none", but some models (gpt-oss-120b)
-        # reject it. Omitting the param keeps reasoning off by default on every
-        # model, so only send it when a real effort (low/medium/high) is asked.
-        effort = (settings.cerebras_reasoning_effort or "").lower()
+        # reject it, so only send it when a real effort (low/medium/high) is asked.
+        chosen = reasoning_effort if reasoning_effort is not None else settings.cerebras_reasoning_effort
+        effort = (chosen or "").lower()
         if effort and effort not in ("none", "off"):
             payload["reasoning_effort"] = effort
         payload.update(extra)
@@ -244,7 +265,9 @@ class Clients:
                     ),
                 },
             ],
-            max_tokens=700,
+            # BRAIN: reason about the decomposition; leave room for reasoning + JSON.
+            reasoning_effort=settings.cerebras_think_effort,
+            max_tokens=2048,
         )
         try:
             raw = (

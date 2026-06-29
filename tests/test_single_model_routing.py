@@ -36,7 +36,7 @@ class SingleModelRoutingTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(route, "cloud")
-        self.assertIn("exactly", reason)
+        self.assertIn("repetition", reason)
 
     async def test_search_prompt_routes_single_agent(self):
         messages = self.messages("Search the web for current Cerebras Gemma 4 info")
@@ -77,7 +77,8 @@ class SingleModelRoutingTests(unittest.IsolatedAsyncioTestCase):
         mode, mode_reason = await router.decide_cloud_mode(self.clients, messages)
 
         self.assertEqual(route, "cloud")
-        self.assertIn("cerebras", reason)
+        # "Use Cerebras" is now an explicit user route override.
+        self.assertIn("override", reason)
         self.assertEqual(mode, "single_agent")
         self.assertIn("cerebras", mode_reason)
 

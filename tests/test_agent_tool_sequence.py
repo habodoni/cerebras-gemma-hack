@@ -98,7 +98,7 @@ class AgentToolSequenceTests(unittest.IsolatedAsyncioTestCase):
         original_call_tool = tools.call_tool
         calls = []
 
-        async def fake_call_tool(name, arguments):
+        async def fake_call_tool(name, arguments, session=None):
             calls.append(name)
             return "ok"
 
@@ -131,7 +131,7 @@ class AgentToolSequenceTests(unittest.IsolatedAsyncioTestCase):
         max_active = 0
         calls = []
 
-        async def fake_call_tool(name, arguments):
+        async def fake_call_tool(name, arguments, session=None):
             nonlocal active, max_active
             calls.append(arguments)
             active += 1

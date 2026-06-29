@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferry — Architecture Audit & Proposed Changes · Cerebras × Gemma 4</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#0a0a0a; --muted:#71717a; --line:#e4e4e7;
+    --soft:#fafafa; --soft2:#f4f4f5; --accent:#0a0a0a;
+    --ok:#16a34a; --warn:#a16207; --bad:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    letter-spacing:-0.01em;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:56px 24px 120px}
+  header.top{margin-bottom:40px}
+  .kicker{font-size:12px; text-transform:uppercase; letter-spacing:.14em; color:var(--muted); font-weight:600}
+  h1{font-size:34px; line-height:1.15; margin:10px 0 8px; font-weight:700}
+  .sub{color:var(--muted); font-size:16px; max-width:70ch}
+  h2{font-size:22px; margin:52px 0 6px; font-weight:700; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:16px; margin:26px 0 6px; font-weight:650}
+  p{margin:8px 0}
+  a{color:var(--fg)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.88em; background:var(--soft2); padding:1px 5px; border-radius:5px}
+  .muted{color:var(--muted)}
+  .lead{font-size:16px}
+  ul{margin:8px 0; padding-left:20px} li{margin:4px 0}
+
+  .grid{display:grid; gap:14px}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+  .cols-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:720px){.cols-3,.cols-2{grid-template-columns:1fr}}
+
+  .card{border:1px solid var(--line); border-radius:12px; padding:16px 18px; background:var(--bg)}
+  .card.soft{background:var(--soft)}
+  .stat{font-size:13px; color:var(--muted)}
+  .stat b{display:block; font-size:22px; color:var(--fg); font-weight:700; letter-spacing:-.02em}
+
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:999px; border:1px solid var(--line); vertical-align:middle}
+  .p0{background:var(--fg); color:#fff; border-color:var(--fg)}
+  .p1{background:#fff; color:var(--fg)}
+  .p2{background:var(--soft2); color:var(--muted)}
+  .done{background:#fff; color:var(--ok); border-color:#bbf7d0}
+  .tag{font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:1px 6px; margin-left:6px}
+
+  .finding{border:1px solid var(--line); border-radius:12px; padding:0; overflow:hidden; margin:16px 0}
+  .finding > .head{display:flex; align-items:center; gap:10px; padding:14px 18px; background:var(--soft); border-bottom:1px solid var(--line)}
+  .finding > .head .n{font-family:ui-monospace,monospace; font-size:12px; color:var(--muted)}
+  .finding > .head h3{margin:0; font-size:16px; flex:1}
+  .finding > .body{padding:16px 18px}
+  .row{display:grid; grid-template-columns:88px 1fr; gap:6px 14px; margin:6px 0}
+  .row .lbl{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding-top:2px}
+  .row.now .lbl{color:var(--bad)} .row.fix .lbl{color:var(--ok)}
+
+  table{border-collapse:collapse; width:100%; font-size:13.5px; margin:10px 0}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--line)}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+  td code{font-size:12px}
+  .mono{font-family:ui-monospace,monospace}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+
+  .pipe{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:14px 0}
+  .pipe .box{border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; background:var(--bg); min-width:120px}
+  .pipe .box b{display:block; font-size:13px}
+  .pipe .box span{font-size:11px; color:var(--muted)}
+  .pipe .arr{align-self:center; color:var(--muted)}
+
+  .eyes{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0}
+  @media(max-width:720px){.eyes{grid-template-columns:repeat(2,1fr)}}
+  .eyes .c{border:1px solid var(--line); border-radius:10px; padding:12px}
+  .eyes .c .ic{font-size:18px}
+  .eyes .c b{display:block; margin-top:4px}
+  .eyes .c .r{font-size:12px; margin-top:4px}
+  .pill{display:inline-block; font-family:ui-monospace,monospace; font-size:11px; border:1px solid var(--line); border-radius:6px; padding:1px 6px}
+
+  blockquote{margin:12px 0; padding:10px 14px; border-left:3px solid var(--fg); background:var(--soft); border-radius:0 8px 8px 0; font-size:14px}
+  hr{border:0; border-top:1px solid var(--line); margin:40px 0}
+  .foot{margin-top:60px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">Ferry · Architecture Audit</div>
+  <h1>How the agents, tools & routing actually work — and what to change</h1>
+  <p class="sub">A hard look at Ferry's cloud-burst pipeline for the <b>Cerebras × Gemma 4</b> hackathon: routing, single-agent tool calls, the orchestrator-workers fan-out, code execution, and web search. Every claim below was read from the code or confirmed with live Cerebras calls.</p>
+</header>
+
+<!-- ============ TL;DR ============ -->
+<h2>TL;DR</h2>
+<p class="lead">The core loop is genuinely good and the demo story is strong. Three things will make it <em>noticeably</em> better for judges, and one tool bug quietly caps quality.</p>
+<div class="grid cols-3" style="margin-top:14px">
+  <div class="card"><span class="badge p0">P0</span><h3 style="margin-top:8px">Role-based reasoning</h3><p class="muted" style="font-size:13.5px">Turn Gemma 4's reasoning <span class="pill">low</span> on for the <b>BRAIN/EYES</b> (plan, judge, search) and <span class="pill">none</span> for <b>HANDS/VOICE</b> (tool calls, final answer). It's a visible Gemma feature and it's free to show off.</p></div>
+  <div class="card"><span class="badge p0">P0</span><h3 style="margin-top:8px">Reuse the E2B sandbox</h3><p class="muted" style="font-size:13.5px">Today every <code>run_code</code> spins up <em>and kills</em> a fresh sandbox — no state survives between steps and <code>pip install</code> repeats each call. Reuse one per agent run.</p></div>
+  <div class="card"><span class="badge p0">P0</span><h3 style="margin-top:8px">Stop over-routing to cloud</h3><p class="muted" style="font-size:13.5px"><code>HARD_KEYWORDS</code> sends "translate", "exactly", "story", "code" to the cloud. That undercuts the local-first pitch and burns the 100k tok/min budget.</p></div>
+</div>
+<p style="margin-top:14px"><span class="badge done">✓ Shipped this session</span> &nbsp;<span class="muted">Orchestrator-workers refactor · history trimming · 429 backoff-retry · real error surfacing · queue/return notifications.</span></p>
+
+<!-- ============ LIVE FINDING: REASONING ============ -->
+<h2>Live finding · Gemma 4 reasoning on Cerebras <span class="tag">tested just now</span></h2>
+<p>Confirmed against the configured model <code>gemma-4-31b</code> from the repo <code>.venv</code>. Reasoning <b>works</b> — and it <b>consumes output tokens</b>, which is the catch.</p>
+<table>
+  <thead><tr><th>reasoning_effort</th><th>max_tokens</th><th>finish</th><th>reasoning field</th><th>visible answer</th><th>completion tok</th></tr></thead>
+  <tbody>
+    <tr><td><code>none</code> / omitted</td><td>64 / 400</td><td class="ok">stop</td><td>—</td><td class="ok">"391" ✓</td><td>4</td></tr>
+    <tr><td><code>low</code></td><td>400</td><td class="ok">stop</td><td>531 ch</td><td class="ok">"391" ✓</td><td>247</td></tr>
+    <tr><td><code>medium</code></td><td>400</td><td class="ok">stop</td><td>267 ch</td><td class="ok">"391" ✓</td><td>136</td></tr>
+    <tr><td><code>high</code></td><td>400</td><td class="ok">stop</td><td>344 ch</td><td class="ok">"391" ✓</td><td>155</td></tr>
+    <tr><td><code>medium</code> / <code>high</code></td><td><b>64</b></td><td class="bad">length</td><td>~160 ch</td><td class="bad">empty ✗</td><td>64 (all on reasoning)</td></tr>
+  </tbody>
+</table>
+<blockquote><b>The footgun:</b> with reasoning on, a small <code>max_tokens</code> is spent entirely on the hidden reasoning trace and the user gets an <b>empty bubble</b> (<code>finish_reason: length</code>). This is the exact same failure mode we already hit locally with <code>gemma4:e2b</code> at <code>LOCAL_MAX_TOKENS=64</code>. <b>Rule: reasoning ⇒ generous <code>max_tokens</code>.</b></blockquote>
+<p class="muted">Today Ferry uses a single global <code>CEREBRAS_REASONING_EFFORT=none</code> for every cloud call (<code>clients.py · _cerebras_payload</code>). That's safe but leaves Gemma's best party trick on the table. See Finding&nbsp;2.</p>
+
+<!-- ============ HOW IT WORKS TODAY ============ -->
+<h2>How it works today</h2>
+<div class="pipe">
+  <div class="box"><b>Open WebUI</b><span>chat → /v1</span></div>
+  <div class="arr">→</div>
+  <div class="box"><b>Router</b><span>local vs cloud</span></div>
+  <div class="arr">→</div>
+  <div class="box"><b>Local · Liquid/e2b</b><span>instant, offline</span></div>
+  <div class="arr">‖</div>
+  <div class="box"><b>Cloud · Gemma 4</b><span>single-agent · or · orchestrator-workers</span></div>
+  <div class="arr">→</div>
+  <div class="box"><b>SSE bubble</b><span>held-open stream</span></div>
+</div>
+<p class="muted" style="font-size:13.5px">When offline, the cloud branch is queued to SQLite and bursts the moment a window opens — with a 🔔 on queue and on return.</p>
+
+<h3>The four organs — a useful lens for reasoning &amp; prompts</h3>
+<div class="eyes">
+  <div class="c"><div class="ic">👁️</div><b>EYES</b><div class="muted" style="font-size:12px">web_search · Exa</div><div class="r">reasoning <span class="pill">low</span></div></div>
+  <div class="c"><div class="ic">🧠</div><b>BRAIN</b><div class="muted" style="font-size:12px">router · planner · synthesis</div><div class="r">reasoning <span class="pill">low</span></div></div>
+  <div class="c"><div class="ic">✋</div><b>HANDS</b><div class="muted" style="font-size:12px">run_code · E2B</div><div class="r">reasoning <span class="pill">none</span></div></div>
+  <div class="c"><div class="ic">🗣️</div><b>VOICE</b><div class="muted" style="font-size:12px">final answer to user</div><div class="r">reasoning <span class="pill">none</span></div></div>
+</div>
+<p class="muted" style="font-size:13.5px">Perception and judgment benefit from thinking; action and the final voice should be fast, deterministic, and token-cheap. This maps cleanly onto per-call <code>reasoning_effort</code>.</p>
+
+<!-- ============ FINDINGS ============ -->
+<h2>Findings &amp; proposed changes</h2>
+
+<!-- F1 ROUTING -->
+<div class="finding">
+  <div class="head"><span class="n">F1</span><h3>Routing over-commits to the cloud</h3><span class="badge p0">P0</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div><code>router.py · HARD_KEYWORDS</code> has ~55 triggers including <code>translate, code, generate, story, poem, exactly, summarize, repeat, today</code>. Any hit ⇒ cloud. "Reply with <b>exactly</b>…" and "translate good morning" both burst to Gemma 4.</div></div>
+    <div class="row"><div class="lbl">Issue</div><div>Undercuts the headline pitch ("local-first; only hard prompts leave the device"), adds latency to easy asks, and spends the <b>100k tok/min</b> budget on things Liquid/e2b handle fine. It also makes the local model look unused in a demo.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>Split the list by <em>intent</em>: a small <b>needs-tools</b> set (<code>search, web, latest, news, csv, pptx, png, run code, file…</code>) that genuinely needs the cloud, vs a <b>maybe-hard</b> set that should defer to length / the LLM router. Drop pure-language triggers (<code>translate, story, poem, summarize, exactly, repeat</code>) — let those stay local.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Restores the local-first story judges can <em>see</em> (instant answers offline), and protects the token budget that the multi-agent demo leans on.</div></div>
+  </div>
+</div>
+
+<!-- F2 REASONING -->
+<div class="finding">
+  <div class="head"><span class="n">F2</span><h3>One global reasoning setting wastes Gemma 4's edge</h3><span class="badge p0">P0</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div><code>_cerebras_payload</code> applies one <code>CEREBRAS_REASONING_EFFORT</code> (default <code>none</code>) to <em>every</em> cloud call: planner, workers, synthesis, and the final answer all get the same setting.</div></div>
+    <div class="row"><div class="lbl">Issue</div><div>If left <code>none</code>, the orchestrator never "thinks" about decomposition or synthesis. If flipped <code>high</code> globally, the tool-calling loops waste tokens reasoning about function calls and risk the empty-bubble footgun.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>Pass <code>reasoning_effort</code> <b>per role</b> (EYES/BRAIN&nbsp;<span class="pill">low</span>, HANDS/VOICE&nbsp;<span class="pill">none</span>) via a small param on <code>_cerebras_payload</code>. Pair every reasoning-on call with a generous <code>max_tokens</code> floor (≥&nbsp;512) so the answer survives.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Better plans and synthesis where it matters, fast cheap tool loops where it doesn't — and it makes a <b>Gemma-specific capability visible</b> to judges (bonus: stream the reasoning as a collapsible "thinking" trace, see F7).</div></div>
+  </div>
+</div>
+
+<!-- F3 E2B -->
+<div class="finding">
+  <div class="head"><span class="n">F3</span><h3>E2B sandbox is created &amp; killed on every <code>run_code</code> call</h3><span class="badge p0">P0</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div><code>tools.py · _run_code_sync</code> does <code>Sandbox.create(...)</code> at the top and <code>sbx.kill()</code> in <code>finally</code> — a brand-new micro-VM per call, torn down immediately.</div></div>
+    <div class="row"><div class="lbl">Issue</div><div>Three costs: (1) <b>no persistence</b> — a file or variable made in step&nbsp;1 is gone by step&nbsp;3, so multi-step build-then-use flows silently fail; (2) <code>pip install python-pptx/moviepy</code> <b>repeats every call</b> (slow, flaky); (3) a <b>cold start per call</b> blunts the "Cerebras is instant" story right at the action step.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>Create one sandbox lazily <b>per agent run</b>, thread it through the tool loop, and kill it once when the run ends. Keep the artifact-diffing as-is. Optionally warm it at run start so the first <code>run_code</code> is already hot.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Real multi-step coding (build a dataset → chart it → assemble a PPTX), seconds shaved off every artifact, and far fewer flaky reinstalls — directly lifts the most impressive demo (file generation).</div></div>
+  </div>
+</div>
+
+<!-- F4 FORCED TOOLS -->
+<div class="finding">
+  <div class="head"><span class="n">F4</span><h3>Forced <code>tool_choice</code> is a blunt instrument</h3><span class="badge p1">P1</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div><code>cerebras_agent</code> sets <code>force_run_code</code> when an artifact word appears and <code>force_web_search</code> when both search + artifact appear, forcing those functions before letting the model choose.</div></div>
+    <div class="row"><div class="lbl">Issue</div><div>It's there because Gemma sometimes <em>narrates</em> code instead of calling the tool — a real problem. But forcing can fire <code>run_code</code> when it isn't needed, or search when the answer is already known, adding latency.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>Keep the forcing as a <em>first-step nudge only</em> (already mostly true), and lean on a tighter system prompt ("never narrate code — call <code>run_code</code>"). Add a one-shot "you forgot to call the tool" reprompt instead of hard-forcing every step.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Keeps the reliability win without paying for unnecessary tool calls on simple prompts.</div></div>
+  </div>
+</div>
+
+<!-- F5 CONCURRENCY / KEYS -->
+<div class="finding">
+  <div class="head"><span class="n">F5</span><h3>Multi-agent fan-out vs a single key's token budget</h3><span class="badge p1">P1</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div>Workers launch as unbounded concurrent tasks (<code>asyncio.create_task</code> per agent), each a multi-step tool loop. One key = <b>100k tok/min, 100 req/min</b>. This session's trimming + 429 backoff already pulled it back from the brink.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>(a) Bound workers with a small <code>asyncio.Semaphore</code> (e.g. 3). (b) <b>Pool multiple keys</b> — <code>CEREBRAS_API_KEYS</code> is already round-robin; adding teammates' keys multiplies the per-minute budget linearly. (c) Cap <code>MULTIVERSE_AGENTS</code> at 3 for the demo.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Makes the flashiest path — parallel specialists answering in seconds — reliable on stage, and turns Cerebras's throughput into the visible win.</div></div>
+  </div>
+</div>
+
+<!-- F6 WEB SEARCH -->
+<div class="finding">
+  <div class="head"><span class="n">F6</span><h3>Web search has no recency bias for "latest/today"</h3><span class="badge p2">P2</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div><code>web_search</code> (Exa) uses <code>type:"auto"</code>, 500-char text + highlights, snippet capped to 600 — well-bounded and safe.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>When the query contains <code>latest/today/current/news</code>, pass Exa a <code>startPublishedDate</code> (last ~30&nbsp;days) and prefer <code>type:"neural"</code>. Optionally include the publish date in each result line so the synthesis can cite freshness.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>"Current events" is a core reason to leave the device; making it visibly fresh sells the EYES capability.</div></div>
+  </div>
+</div>
+
+<!-- F7 UI / THINKING -->
+<div class="finding">
+  <div class="head"><span class="n">F7</span><h3>Reasoning &amp; tool steps aren't surfaced as a "thinking" trace</h3><span class="badge p1">P1</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div>Tool steps stream as italic status lines (<code>🔍 searching…</code>, <code>🐍 running code</code>) — good. The Gemma <code>reasoning</code> field is dropped entirely.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>For BRAIN/EYES calls, stream the reasoning into a collapsible <code>&lt;details&gt;Thinking…&lt;/details&gt;</code> block (Open WebUI renders markdown details). Keep VOICE clean.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Shows judges, live, that this is <b>Gemma 4 reasoning on Cerebras</b> — the exact thing the prize rewards — without cluttering the final answer.</div></div>
+  </div>
+</div>
+
+<!-- F8 ROUTING DUP -->
+<div class="finding">
+  <div class="head"><span class="n">F8</span><h3>Routing keyword lists overlap and are hard to maintain</h3><span class="badge p2">P2</span></div>
+  <div class="body">
+    <div class="row now"><div class="lbl">Now</div><div>Three overlapping tuples — <code>HARD_KEYWORDS</code>, <code>MULTI_AGENT_KEYWORDS</code>, <code>SINGLE_AGENT_KEYWORDS</code> — plus a local-LLM probe on borderline cases.</div></div>
+    <div class="row fix"><div class="lbl">Change</div><div>Collapse to one table mapping keyword → capability (<code>tool</code>, <code>research</code>, <code>language</code>) and derive all three decisions from it. Document the precedence in one place.</div></div>
+    <div class="row"><div class="lbl">Why</div><div>Easier to explain in the write-up and less likely to drift — clarity is a judging axis too.</div></div>
+  </div>
+</div>
+
+<!-- ============ ROADMAP ============ -->
+<h2>Prioritized for the 24h</h2>
+<table>
+  <thead><tr><th>#</th><th>Change</th><th>Effort</th><th>Payoff</th><th>Pri</th></tr></thead>
+  <tbody>
+    <tr><td>F3</td><td>Reuse one E2B sandbox per agent run</td><td>~M</td><td>Faster + multi-step files work</td><td><span class="badge p0">P0</span></td></tr>
+    <tr><td>F2</td><td>Per-role <code>reasoning_effort</code> + max_tokens floor</td><td>~S</td><td>Visible Gemma feature, better plans</td><td><span class="badge p0">P0</span></td></tr>
+    <tr><td>F1</td><td>Trim <code>HARD_KEYWORDS</code> to needs-tools</td><td>~S</td><td>Local-first credibility + saves tokens</td><td><span class="badge p0">P0</span></td></tr>
+    <tr><td>F5</td><td>Worker semaphore + add key(s) to the pool</td><td>~S</td><td>Reliable multi-agent on stage</td><td><span class="badge p1">P1</span></td></tr>
+    <tr><td>F7</td><td>Collapsible reasoning/thinking trace</td><td>~S</td><td>Demo wow, prize-aligned</td><td><span class="badge p1">P1</span></td></tr>
+    <tr><td>F4</td><td>Soften forced tool_choice → nudge+reprompt</td><td>~S</td><td>Fewer wasted tool calls</td><td><span class="badge p1">P1</span></td></tr>
+    <tr><td>F6</td><td>Exa recency for "latest" queries</td><td>~S</td><td>Fresh, citable EYES</td><td><span class="badge p2">P2</span></td></tr>
+    <tr><td>F8</td><td>Unify routing keyword tables</td><td>~M</td><td>Clarity / maintainability</td><td><span class="badge p2">P2</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ============ DON'T BREAK ============ -->
+<h2>What's already solid — don't break it</h2>
+<div class="grid cols-2">
+  <div class="card soft"><b>Held-open SSE delivery</b><p class="muted" style="font-size:13.5px">Placeholder → heartbeats → tokens stream into the same bubble, no Open WebUI plugin. This is the clever core; keep the contract intact.</p></div>
+  <div class="card soft"><b>Single <code>ferry</code> model + internal routing</b><p class="muted" style="font-size:13.5px"><code>model="ferry"</code> is hardcoded server-side, so stale client model ids never break. No user toggle — Ferry decides.</p></div>
+  <div class="card soft"><b>Orchestrator-workers (this session)</b><p class="muted" style="font-size:13.5px">Workers get only self-contained instructions; the orchestrator plans, fixes, and synthesizes. Token-light and clean.</p></div>
+  <div class="card soft"><b>Artifact safety</b><p class="muted" style="font-size:13.5px">Path-traversal guard (<code>_artifact_target</code>), size/count caps, dotfile filtering. Don't loosen these when adding sandbox reuse.</p></div>
+  <div class="card soft"><b>Resilience (this session)</b><p class="muted" style="font-size:13.5px">History trimmed at the cloud boundary, 429 backoff-retry, real Cerebras error bodies surfaced instead of a bare "400".</p></div>
+  <div class="card soft"><b>Queue/return notifications (this session)</b><p class="muted" style="font-size:13.5px">macOS locally, ntfy push to phone from the headless Jetson — nails the "walk away, get pinged" story.</p></div>
+</div>
+
+<!-- ============ JUDGE LENS ============ -->
+<h2>Through the judges' lens</h2>
+<div class="grid cols-2">
+  <div class="card"><b>Use of Cerebras</b><p class="muted" style="font-size:13.5px">Speed is the weapon. Lead the demo with parallel workers answering near-instantly (F5), and shave the E2B cold start (F3) so the action step feels as fast as inference.</p></div>
+  <div class="card"><b>Use of Gemma 4</b><p class="muted" style="font-size:13.5px">Make reasoning <em>visible</em> (F2 + F7) and lean on tool-calling + the local Gemma/Liquid edge model. The prize rewards showing Gemma doing something only Gemma does here.</p></div>
+  <div class="card"><b>Technical execution</b><p class="muted" style="font-size:13.5px">Offline queue + burst + held-open SSE is already a differentiator. The resilience fixes mean it won't faceplant on a "deep research" prompt mid-demo.</p></div>
+  <div class="card"><b>Story &amp; clarity</b><p class="muted" style="font-size:13.5px">"Local-first AI for intermittent connectivity, bursting to Gemma 4 on Cerebras." Tightening routing (F1) and keeping the EYES/BRAIN/HANDS/VOICE framing makes the architecture explainable in one breath.</p></div>
+</div>
+
+<p class="foot">Generated for Ferry · Cerebras × Gemma 4 hackathon. Findings read from <code>ferry/router.py</code>, <code>ferry/clients.py</code>, <code>ferry/tools.py</code>, <code>ferry/drainer.py</code>, <code>ferry/main.py</code>; reasoning behavior confirmed with live <code>gemma-4-31b</code> calls. "Shipped this session" items are already on <code>main</code>.</p>
+
+</div>
+</body>
+</html>

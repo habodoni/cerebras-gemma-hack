@@ -97,36 +97,46 @@ async def web_search(query: str, num_results: int = 5) -> str:
 
 
 # ---- run_code (E2B) ----
+def _execute_on_sandbox(sbx, code: str) -> str:
+    """Run one code cell on an existing sandbox and report output + new files.
+
+    Diffs the file tree before/after so we only return files this cell created,
+    even on a long-lived sandbox that already holds earlier steps' artifacts.
+    """
+    before = _sandbox_file_entries(sbx)
+    execution = sbx.run_code(code)
+    parts: list[str] = []
+    logs = execution.logs
+    if getattr(logs, "stdout", None):
+        parts.append("stdout:\n" + "".join(logs.stdout).strip())
+    if getattr(logs, "stderr", None):
+        parts.append("stderr:\n" + "".join(logs.stderr).strip())
+    if execution.error:
+        parts.append(f"error: {execution.error.name}: {execution.error.value}")
+    for res in execution.results:
+        text = getattr(res, "text", None)
+        if text:
+            parts.append("result: " + text)
+    files = _created_files(before, _sandbox_file_entries(sbx))
+    file_lines = _save_sandbox_files(sbx, files[:settings.e2b_max_files])
+    if file_lines:
+        parts.append("files created:\n" + "\n".join(file_lines))
+    if len(files) > settings.e2b_max_files:
+        parts.append(
+            f"files skipped: {len(files) - settings.e2b_max_files} "
+            f"extra file(s) beyond E2B_MAX_FILES={settings.e2b_max_files}"
+        )
+    return "\n".join(parts) if parts else "(no output)"
+
+
 def _run_code_sync(code: str) -> str:
+    """One-shot: a fresh sandbox per call (fallback when there is no CodeSession)."""
     from e2b_code_interpreter import Sandbox
 
     sbx = Sandbox.create(api_key=settings.e2b_api_key)
     try:
         _ensure_file_roots(sbx)
-        before = _sandbox_file_entries(sbx)
-        execution = sbx.run_code(code)
-        parts: list[str] = []
-        logs = execution.logs
-        if getattr(logs, "stdout", None):
-            parts.append("stdout:\n" + "".join(logs.stdout).strip())
-        if getattr(logs, "stderr", None):
-            parts.append("stderr:\n" + "".join(logs.stderr).strip())
-        if execution.error:
-            parts.append(f"error: {execution.error.name}: {execution.error.value}")
-        for res in execution.results:
-            text = getattr(res, "text", None)
-            if text:
-                parts.append("result: " + text)
-        files = _created_files(before, _sandbox_file_entries(sbx))
-        file_lines = _save_sandbox_files(sbx, files[:settings.e2b_max_files])
-        if file_lines:
-            parts.append("files created:\n" + "\n".join(file_lines))
-        if len(files) > settings.e2b_max_files:
-            parts.append(
-                f"files skipped: {len(files) - settings.e2b_max_files} "
-                f"extra file(s) beyond E2B_MAX_FILES={settings.e2b_max_files}"
-            )
-        return "\n".join(parts) if parts else "(no output)"
+        return _execute_on_sandbox(sbx, code)
     finally:
         sbx.kill()
 
@@ -136,6 +146,39 @@ async def run_code(code: str) -> str:
         return "[run_code unavailable: no E2B_API_KEY configured]"
     # The E2B SDK is sync; run it off the event loop.
     return await asyncio.to_thread(_run_code_sync, code)
+
+
+class CodeSession:
+    """One reusable E2B sandbox for a single agent run.
+
+    Created lazily on the first run_code call and reused across the loop, so
+    files and pip-installed packages persist between steps (build a dataset in
+    one step, chart it in the next). Killed once when the run ends —
+    Clients.cerebras_agent calls close() in its finally.
+    """
+
+    def __init__(self) -> None:
+        self._sbx = None
+
+    async def run_code(self, code: str) -> str:
+        if not settings.e2b_api_key:
+            return "[run_code unavailable: no E2B_API_KEY configured]"
+        return await asyncio.to_thread(self._run, code)
+
+    def _run(self, code: str) -> str:
+        if self._sbx is None:
+            from e2b_code_interpreter import Sandbox
+            self._sbx = Sandbox.create(api_key=settings.e2b_api_key)
+            _ensure_file_roots(self._sbx)
+        return _execute_on_sandbox(self._sbx, code)
+
+    async def close(self) -> None:
+        sbx, self._sbx = self._sbx, None
+        if sbx is not None:
+            try:
+                await asyncio.to_thread(sbx.kill)
+            except Exception:  # noqa: BLE001 - cleanup must never raise
+                pass
 
 
 def _ensure_file_roots(sbx) -> None:
@@ -262,16 +305,22 @@ def _artifact_url(run_id: str, rel: str) -> str:
 DISPATCH = {"web_search": web_search, "run_code": run_code}
 
 
-async def call_tool(name: str, arguments) -> str:
-    """Execute a tool by name with JSON-or-dict arguments; never raises."""
+async def call_tool(name: str, arguments, session: "CodeSession | None" = None) -> str:
+    """Execute a tool by name with JSON-or-dict arguments; never raises.
+
+    When a CodeSession is supplied, run_code reuses its long-lived sandbox so
+    state persists across the agent run; otherwise it falls back to one-shot.
+    """
     try:
         args = json.loads(arguments) if isinstance(arguments, str) else (arguments or {})
     except (json.JSONDecodeError, TypeError):
         args = {}
-    fn = DISPATCH.get(name)
-    if fn is None:
-        return f"[unknown tool: {name}]"
     try:
+        if name == "run_code" and session is not None:
+            return await session.run_code(str(args.get("code", "")))
+        fn = DISPATCH.get(name)
+        if fn is None:
+            return f"[unknown tool: {name}]"
         return await fn(**args)
     except Exception as exc:  # noqa: BLE001 - tool errors go back to the model, not the user
         return f"[tool {name} error: {exc}]"
