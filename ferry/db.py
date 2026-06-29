@@ -180,6 +180,58 @@ async def clear() -> None:
     await _db.commit()
 
 
+def _parse_iso(ts):
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return None
+
+
+async def metrics(since: str | None = None) -> dict:
+    """Burst stats over delivered tasks — the numbers the scoreboard shows.
+
+    `since` (an ISO timestamp, e.g. when the window opened) limits the stats to
+    the current burst so the headline reflects what just happened, not all time.
+    """
+    assert _db is not None
+    cur = await _db.execute(
+        "SELECT sent_at, completed_at FROM tasks "
+        "WHERE status='done' AND sent_at IS NOT NULL AND completed_at IS NOT NULL"
+    )
+    rows = await cur.fetchall()
+    since_dt = _parse_iso(since)
+    lats: list[float] = []
+    first_sent = last_done = None
+    for r in rows:
+        s, c = _parse_iso(r["sent_at"]), _parse_iso(r["completed_at"])
+        if s is None or c is None:
+            continue
+        if since_dt is not None and c < since_dt:
+            continue
+        lat = (c - s).total_seconds()
+        if lat < 0:
+            continue
+        lats.append(lat)
+        first_sent = s if first_sent is None or s < first_sent else first_sent
+        last_done = c if last_done is None or c > last_done else last_done
+    if not lats:
+        return {"drained": 0, "avg_s": None, "min_s": None, "max_s": None,
+                "window_clear_s": None, "tasks_per_min": None}
+    window_start = since_dt or first_sent
+    clear_s = (last_done - window_start).total_seconds() if last_done and window_start else None
+    tpm = round(len(lats) / clear_s * 60, 1) if clear_s and clear_s > 0 else None
+    return {
+        "drained": len(lats),
+        "avg_s": round(sum(lats) / len(lats), 2),
+        "min_s": round(min(lats), 2),
+        "max_s": round(max(lats), 2),
+        "window_clear_s": round(clear_s, 1) if clear_s is not None else None,
+        "tasks_per_min": tpm,
+    }
+
+
 def _last_user_text(messages: list[dict]) -> str:
     for msg in reversed(messages):
         if msg.get("role") == "user":

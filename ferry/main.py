@@ -287,6 +287,17 @@ async def tasks(limit: int = 200):
     return await db.list_tasks(limit=limit)
 
 
+@app.get("/api/metrics")
+async def metrics(request: Request):
+    """Speed scoreboard: burst stats since the window opened."""
+    since = getattr(request.app.state, "window_opened_at", None)
+    m = await db.metrics(since=since)
+    m["window_opened_at"] = since
+    m["keys"] = len(settings.cerebras_api_keys)
+    m["cloud_model"] = settings.cerebras_model
+    return m
+
+
 @app.get("/api/files/{run_id}/{file_path:path}")
 async def generated_file(run_id: str, file_path: str):
     target = _generated_file_path(run_id, file_path)
@@ -302,6 +313,11 @@ async def demo_online(state: str, request: Request):
     if state not in mapping:
         return JSONResponse({"error": "state must be true|false|auto"}, status_code=400)
     watcher.set_override(mapping[state])
+    # Stamp when the burst window opens so the scoreboard can measure window-to-clear.
+    if mapping[state] is True:
+        request.app.state.window_opened_at = db.now_iso()
+    elif mapping[state] is False:
+        request.app.state.window_opened_at = None
     return {"online": watcher.is_online(), "override": watcher.override}
 
 
@@ -333,6 +349,8 @@ async def demo_clear():
 
 @app.post("/demo/drain")
 async def demo_drain(request: Request):
+    if not getattr(request.app.state, "window_opened_at", None):
+        request.app.state.window_opened_at = db.now_iso()
     drainer: BurstDrainer = request.app.state.drainer
     drained = await drainer.drain_once()
     return {"drained": drained}

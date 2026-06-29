@@ -128,12 +128,16 @@
     <div class="flow">
       <span class="chip">You</span><span class="arrow"></span>
       <span class="chip">Ferry</span><span class="arrow"></span>
-      <span class="chip">on-device · gemma4:e2b</span>
+      <span class="chip" id="localChip">on-device</span>
       <span style="opacity:.5">or</span>
       <span class="chip">backlog</span><span class="arrow"></span>
-      <span class="chip">Cerebras · gemma-4-31b</span>
+      <span class="chip" id="cloudChip">Cerebras</span>
     </div>
     <a class="how" href="/how" target="_blank">How it works ↗</a>
+  </div>
+
+  <div id="reachWarn" style="display:none; margin:0 0 12px; padding:9px 14px; border:1px solid #d4a017; color:#a6760a; border-radius:10px; font-size:13px">
+    ⚠ Window switch is <b>open</b>, but Cerebras isn’t reachable — cloud work will stay queued until it is.
   </div>
 
   <div class="grid">
@@ -232,7 +236,7 @@ async function send(){
           ? '<span class="tag cloud">queued → Cerebras</span><span class="dots">waiting for window</span>'
           : cloud
             ? '<span class="tag cloud">Gemma 4 · tools</span>'
-            : '<span class="tag">on-device · gemma4:e2b</span>';
+            : '<span class="tag">on-device' + (LOCAL_MODEL ? ' · ' + LOCAL_MODEL : '') + '</span>';
       }
       // Once the real cloud answer starts arriving, drop the "waiting" hint.
       if (content.startsWith(PLACEHOLDER_MARK) && content.length > 140) {
@@ -287,6 +291,8 @@ async function clearAll(){ await fetch("/demo/clear", { method: "POST" }); $("ba
 
 function esc(x){ const d=document.createElement("div"); d.textContent=x??""; return d.innerHTML; }
 
+let LOCAL_MODEL = "";
+
 async function poll(){
   try {
     const [s, t] = await Promise.all([
@@ -296,6 +302,12 @@ async function poll(){
     const on = s.online;
     $("connSwitch").dataset.on = on;
     $("connLbl").textContent = on ? "Online" : "Offline";
+    // Render the live model names (never hardcode) + warn if the window is open
+    // but Cerebras can't actually be reached (work would silently stay queued).
+    LOCAL_MODEL = s.local_model || "";
+    $("localChip").textContent = "on-device · " + (s.local_model || "model");
+    $("cloudChip").textContent = "Cerebras · " + (s.cloud_model || "");
+    $("reachWarn").style.display = (s.online && !s.can_burst) ? "block" : "none";
     $("s-queued").textContent = s.counts.queued;
     $("s-sending").textContent = s.counts.sending;
     $("s-done").textContent = s.counts.done;

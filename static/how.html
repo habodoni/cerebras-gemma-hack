@@ -166,7 +166,7 @@
             <div class="t">🛶 Ferry</div><div class="s">router · OpenAI-compatible</div>
           </div>
           <div class="node" style="left:470px; top:92px; width:178px;">
-            <div class="t">⚡ gemma4:e2b</div><div class="s">on-device · instant, offline</div>
+            <div class="t">⚡ Liquid LFM2.5</div><div class="s">on-device · instant, offline</div>
           </div>
           <div class="node js-backlog" style="left:478px; top:300px; width:160px;">
             <div class="t">▤ Backlog</div><div class="s">SQLite · FIFO · durable</div>
@@ -267,8 +267,8 @@
       <span class="k"><span class="s4"></span> <b>answer back</b> → streamed to the client over the hotspot</span>
       <span class="k"><span class="s3"></span> <b>uplink</b> → dashed when down, live during a window</span>
     </div>
-    <p class="note">The on-device brain is <code>LFM2.5-1.2B</code> (<code>bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M</code>) — lighter
-    than <code>gemma4:e2b</code> so it fits the Orin Nano; it's just <code>LOCAL_MODEL</code> in config. The client↔hub
+    <p class="note">The on-device brain is <code>LFM2.5-1.2B</code> (<code>bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M</code>) —
+    small enough to run on the Orin Nano (and the Mac); it's just <code>LOCAL_MODEL</code> in config. The client↔hub
     hotspot is always on; only the hub's uplink to Cerebras gates the burst. Cloud model stays <code>gemma-4-31b</code>.</p>
   </section>
 </div>

@@ -32,6 +32,17 @@
   .bar > i{display:block; height:100%; width:0%; background:var(--fg); transition:width .6s ease}
   .bar-meta{display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px}
 
+  .scoreboard{background:var(--fg); color:#fff; border-radius:14px; padding:20px 22px; margin-bottom:18px}
+  .score-head{font-size:11px; text-transform:uppercase; letter-spacing:.1em; opacity:.6; font-weight:700}
+  .score-big{font-size:30px; font-weight:800; letter-spacing:-.02em; margin-top:6px}
+  .score-big b{font-size:38px}
+  .score-sub{opacity:.7; font-size:13px; margin-top:3px}
+  .score-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:16px;
+    border-top:1px solid rgba(255,255,255,.15); padding-top:14px}
+  .score-grid > div{display:flex; flex-direction:column}
+  .score-grid span{font-size:20px; font-weight:700}
+  .score-grid label{font-size:10px; text-transform:uppercase; letter-spacing:.06em; opacity:.55; margin-top:2px}
+  @media(max-width:720px){.score-grid{grid-template-columns:repeat(3,1fr)}}
   .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px}
   .card{background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
   .card .n{font-size:30px; font-weight:700; letter-spacing:-.02em}
@@ -78,6 +89,20 @@
     <div class="bar-meta"><span id="barLeft">0 drained</span><span id="barRight">backlog 0</span></div>
   </div>
 
+  <!-- SCOREBOARD: the number to remember -->
+  <div class="scoreboard" id="scoreboard" style="display:none">
+    <div class="score-head">⚡ Cerebras burst</div>
+    <div class="score-big"><b id="sb-drained">0</b> answers in <b id="sb-clear">—</b></div>
+    <div class="score-sub" id="sb-sub">Gemma 4 on Cerebras cleared the backlog while the window was open.</div>
+    <div class="score-grid">
+      <div><span id="sb-avg">—</span><label>avg latency</label></div>
+      <div><span id="sb-fast">—</span><label>fastest</label></div>
+      <div><span id="sb-slow">—</span><label>slowest</label></div>
+      <div><span id="sb-tpm">—</span><label>tasks / min</label></div>
+      <div><span id="sb-keys">—</span><label>cerebras keys</label></div>
+    </div>
+  </div>
+
   <div class="stats">
     <div class="card"><div class="n" id="c-queued">0</div><div class="l"><span class="sw queued"></span>Queued</div></div>
     <div class="card"><div class="n" id="c-sending">0</div><div class="l"><span class="sw sending"></span>Bursting</div></div>
@@ -109,12 +134,14 @@ const ORDER = { sending: 0, queued: 1, error: 2, done: 3 };
 
 async function refresh(){
   try{
-    const [s, t] = await Promise.all([
+    const [s, t, m] = await Promise.all([
       fetch('/api/status').then(r => r.json()),
       fetch('/api/tasks?limit=200').then(r => r.json()),
+      fetch('/api/metrics').then(r => r.json()),
     ]);
     renderStatus(s);
     renderTasks(t);
+    renderMetrics(m);
   }catch(e){ /* service starting */ }
 }
 
@@ -158,6 +185,21 @@ function renderStatus(s){
   $('models').textContent = `${s.local_model}  →  ${s.cloud_model}`;
   const ov = s.override === null ? 'auto' : String(s.override);
   $('meta').textContent = `${s.keys} key(s) · router=${s.router_mode} · window=${ov}`;
+}
+
+function fmtS(x){ return x == null ? '—' : (x >= 10 ? Math.round(x) : x) + 's'; }
+function renderMetrics(m){
+  const sb = $('scoreboard');
+  if (!m || !m.drained){ sb.style.display = 'none'; return; }
+  sb.style.display = 'block';
+  $('sb-drained').textContent = m.drained;
+  $('sb-clear').textContent = fmtS(m.window_clear_s);
+  $('sb-avg').textContent = fmtS(m.avg_s);
+  $('sb-fast').textContent = fmtS(m.min_s);
+  $('sb-slow').textContent = fmtS(m.max_s);
+  $('sb-tpm').textContent = m.tasks_per_min != null ? m.tasks_per_min : '—';
+  $('sb-keys').textContent = m.keys ?? '—';
+  $('sb-sub').textContent = `Gemma 4 (${m.cloud_model}) cleared the backlog while the window was open.`;
 }
 
 function esc(x){ const d = document.createElement('div'); d.textContent = x ?? ''; return d.innerHTML; }
