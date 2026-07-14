@@ -52,6 +52,10 @@ class Clients:
             await self.extra_local.aclose()
 
     def _local_client(self, model: str) -> httpx.AsyncClient:
+        # The main local model always lives on the main backend, even if it is
+        # also listed in the extras.
+        if model == settings.local_model:
+            return self.ollama
         if model in settings.extra_local_models:
             return self.extra_local
         return self.ollama

@@ -99,7 +99,7 @@ async def chat_completions(request: Request):
 
     clients: Clients = request.app.state.clients
 
-    if requested in settings.extra_local_models:
+    if requested == settings.local_model or requested in settings.extra_local_models:
         if not stream:
             content = await _safe_local_complete(
                 clients, messages, requested, backend_model=requested

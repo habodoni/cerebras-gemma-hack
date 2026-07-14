@@ -112,8 +112,10 @@ class Settings:
 
     @property
     def service_models(self) -> list[str]:
-        # "ferry" is the product (auto-routing); extras are direct passthroughs.
-        return ["ferry", *self.extra_local_models]
+        # "ferry" is the product (auto-routing). The local model and the extras
+        # also appear as direct passthrough entries in the picker.
+        models = ["ferry", self.local_model, *self.extra_local_models]
+        return list(dict.fromkeys(models))
 
 
 settings = Settings()
