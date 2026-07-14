@@ -124,12 +124,17 @@ for _ in $(seq 1 60); do
 done
 [ "$health" = "200" ] || die "bonsai.service not healthy — check: journalctl -u bonsai -n 50"
 
-step "Pull the extra picker model into Ollama (nemotron-3-nano:4b, ~2.8 GB)"
-if command -v ollama >/dev/null && ! ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b'; then
-    ollama pull nemotron-3-nano:4b || echo "WARN: nemotron pull failed; retry later with: ollama pull nemotron-3-nano:4b"
+step "Pull the picker extras into Ollama (nemotron ~2.8 GB, official Liquid ~700 MB)"
+if command -v ollama >/dev/null; then
+    ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b' \
+        || ollama pull nemotron-3-nano:4b \
+        || echo "WARN: nemotron pull failed; retry later with: ollama pull nemotron-3-nano:4b"
+    ollama list 2>/dev/null | grep -qi '^LiquidAI/lfm2.5-1.2b-instruct' \
+        || ollama pull LiquidAI/lfm2.5-1.2b-instruct \
+        || echo "WARN: Liquid pull failed; retry later with: ollama pull LiquidAI/lfm2.5-1.2b-instruct"
 fi
 
-step "Repoint Ferry at Bonsai (Liquid stays in Ollama as fallback)"
+step "Repoint Ferry at Bonsai (default; Liquid + nemotron stay in the picker)"
 cd "$REPO_DIR"
 [ -s .env ] && [ -n "$(tail -c1 .env)" ] && echo >> .env
 set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
@@ -137,8 +142,9 @@ set_env OLLAMA_BASE_URL "http://127.0.0.1:$PORT/v1"
 set_env LOCAL_MODEL "1-bit-Bonsai-27B"
 set_env LOCAL_MAX_TOKENS 400
 set_env LOCAL_TIMEOUT_SECONDS 180
-set_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b"
+set_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct"
 set_env EXTRA_LOCAL_BASE_URL "http://127.0.0.1:11434/v1"
+set_env EXPOSE_ROUTER_MODEL false
 sudo systemctl restart ferry
 sleep 3
 
@@ -154,11 +160,11 @@ echo
 echo "== Done. Bonsai 27B (1-bit) is the local model — build: $BUILD_KIND =="
 cat <<'EOF'
 
-Revert to Liquid at any time (bcluzel/... is the tag actually pulled on this Jetson):
+Revert to Liquid as the default at any time:
   cd ~/cerebras-gemma-hack
   set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
   set_env OLLAMA_BASE_URL http://localhost:11434/v1
-  set_env LOCAL_MODEL bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M
+  set_env LOCAL_MODEL LiquidAI/lfm2.5-1.2b-instruct
   set_env LOCAL_MAX_TOKENS 64
   set_env LOCAL_TIMEOUT_SECONDS 45
   sed -i '/^EXTRA_LOCAL_BASE_URL=/d' .env      # extras follow OLLAMA_BASE_URL again

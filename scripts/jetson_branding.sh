@@ -19,10 +19,14 @@ if ! docker image inspect ghcr.io/open-webui/open-webui:main >/dev/null 2>&1; th
 fi
 
 docker rm -f open-webui 2>/dev/null || true
+# DEFAULT_MODELS seeds Bonsai as the default for new chats. Note: Open WebUI
+# persists this in its DB after first boot, so if a default was already saved,
+# change it in the UI instead: Admin Panel -> Settings -> Interface -> Default Model.
 docker run -d -p 3000:8080 \
     --add-host=host.docker.internal:host-gateway \
     -v open-webui:/app/backend/data \
     -e WEBUI_NAME="OfflineBase" \
+    -e DEFAULT_MODELS="1-bit-Bonsai-27B" \
     --name open-webui --restart unless-stopped \
     ghcr.io/open-webui/open-webui:main \
     || { echo "ERROR: docker run failed — chat UI is DOWN. Check: docker logs open-webui" >&2; exit 1; }

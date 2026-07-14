@@ -50,7 +50,7 @@ architecture), `CLAUDE.md` (project overview).
 | Operator dashboard | `http://192.168.1.62:8080/dashboard` |
 | Demo page / diagram | `http://192.168.1.62:8080/demo` · `/how` |
 | Repo on device | `/home/ethan/cerebras-gemma-hack` |
-| Local model | Liquid `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` (Ollama) |
+| Local model | `1-bit-Bonsai-27B` (llama-server :11435) after the Bonsai swap; Liquid `LiquidAI/lfm2.5-1.2b-instruct` (Ollama) before/fallback |
 | Cloud model | `gemma-4-31b` (Cerebras) |
 | Ports | Ferry `8080` · Open WebUI `3000` · Ollama `11434` · Tailscale serve `8443` |
 
@@ -118,11 +118,12 @@ Key facts:
   `.env` (gitignored). Git remote is HTTPS with a Personal Access Token embedded
   in `.git/config` (so `git pull` just works — **rotate that token after the
   hackathon**).
-- **Local model:** the Jetson's Ollama has `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M`
-  pulled, and its `.env` sets `LOCAL_MODEL` to exactly that. (The code's *default*
-  and the templates say `LiquidAI/lfm2.5-1.2b-instruct`; the Jetson deliberately
-  uses the `bcluzel` Q4 id because that is the one actually pulled. If you ever
-  re-copy a template over `.env`, re-pull or fix `LOCAL_MODEL` to match.)
+- **Local model:** after the Bonsai swap (`scripts/jetson_bonsai_setup.sh`),
+  `LOCAL_MODEL=1-bit-Bonsai-27B` served by llama-server on :11435. The official
+  Liquid tag `LiquidAI/lfm2.5-1.2b-instruct` stays pulled in Ollama as the
+  fallback and as a picker entry. (Historical note: the original hackathon
+  deploy used the community `bcluzel` Q4 quant; it has been replaced by the
+  official tag.)
 - **Cloud model:** `gemma-4-31b` on Cerebras, drained over the Jetson's uplink.
 - **Open WebUI → Ferry wiring** lives inside Open WebUI's own DB (set once in the
   UI, persists): **Admin → Connections → OpenAI API** = `http://172.17.0.1:8080/v1`,
@@ -365,7 +366,7 @@ Full runbook is `JETSON_DEPLOY.md`; the essence:
 ```bash
 # 1. Local model
 #    (native Ollama; pull whatever LOCAL_MODEL will point at)
-ollama pull bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M      # or LiquidAI/lfm2.5-1.2b-instruct
+ollama pull LiquidAI/lfm2.5-1.2b-instruct
 
 # 2. Ferry
 git clone <new-repo-url> ~/ferry && cd ~/ferry
@@ -411,7 +412,7 @@ The ones you actually touch per host:
 
 | Var | What | Typical |
 |---|---|---|
-| `LOCAL_MODEL` | Ollama model id (must be pulled) | `bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M` |
+| `LOCAL_MODEL` | local model id | `1-bit-Bonsai-27B` (llama-server) or `LiquidAI/lfm2.5-1.2b-instruct` (Ollama) |
 | `OLLAMA_BASE_URL` | local model server | `http://localhost:11434/v1` |
 | `CEREBRAS_API_KEYS` | comma-separated key pool | `csk-…,csk-…` |
 | `CEREBRAS_MODEL` | cloud model | `gemma-4-31b` |

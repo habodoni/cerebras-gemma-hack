@@ -51,7 +51,7 @@ ensure_env CEREBRAS_THINK_EFFORT medium
 ensure_env NOTIFY_MODE ntfy
 ensure_env NTFY_TOPIC ferry-ethan-7q3v9k2x
 ensure_env PUBLIC_BASE_URL http://192.168.1.62:8080
-ensure_env EXTRA_LOCAL_MODELS nemotron-3-nano:4b
+ensure_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct"
 ensure_env EXPOSE_ROUTER_MODEL false
 
 # Raise CEREBRAS_MAX_TOKENS ONLY off the known legacy defaults — a value you
@@ -64,10 +64,16 @@ elif [ "$cur" = "1024" ] || [ "$cur" = "500" ]; then
     echo "  .env CEREBRAS_MAX_TOKENS $cur -> 8192 (legacy default was too small for reasoning)"
 fi
 
-# --- extra picker model ------------------------------------------------------
-if command -v ollama >/dev/null && ! ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b'; then
-    echo "pulling nemotron-3-nano:4b (~2.8 GB) ..."
-    ollama pull nemotron-3-nano:4b || echo "WARN: nemotron pull failed; the picker entry will error until it is pulled"
+# --- picker models -----------------------------------------------------------
+if command -v ollama >/dev/null; then
+    if ! ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b'; then
+        echo "pulling nemotron-3-nano:4b (~2.8 GB) ..."
+        ollama pull nemotron-3-nano:4b || echo "WARN: nemotron pull failed; the picker entry will error until it is pulled"
+    fi
+    if ! ollama list 2>/dev/null | grep -qi '^LiquidAI/lfm2.5-1.2b-instruct'; then
+        echo "pulling LiquidAI/lfm2.5-1.2b-instruct (~700 MB, official tag) ..."
+        ollama pull LiquidAI/lfm2.5-1.2b-instruct || echo "WARN: Liquid pull failed; the picker entry will error until it is pulled"
+    fi
 fi
 
 # --- restart + verify --------------------------------------------------------

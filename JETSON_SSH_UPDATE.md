@@ -104,7 +104,10 @@ Expect `"local_model":"1-bit-Bonsai-27B"` and `"cloud_model":"gemma-4-31b"`.
 Then from any device on the network, open `http://192.168.1.62:3000`:
 
 - Header reads **OfflineBase (Open WebUI)**.
-- The model picker shows **`ferry`** and **`nemotron-3-nano:4b`**.
+- The model picker shows **`1-bit-Bonsai-27B`** (default, listed first),
+  **`nemotron-3-nano:4b`**, and **`LiquidAI/lfm2.5-1.2b-instruct`** — no
+  `ferry` entry. If new chats don't preselect Bonsai, set it once in
+  **Admin Panel → Settings → Interface → Default Model**.
 - A quick prompt on `ferry` answers from Bonsai (first answer includes model
   warm-up; after that expect ~5-12 tok/s — a 27B on an 8 GB board is a
   capability statement, not a speed one).
@@ -121,11 +124,11 @@ journalctl -u ferry -n 30
 
 ## 4. Revert / undo
 
-Back to Liquid as the local model (also frees ~5 GB of memory). `bcluzel/...`
-is the tag actually pulled on this Jetson's Ollama:
+Back to Liquid (official `LiquidAI/lfm2.5-1.2b-instruct` tag) as the default —
+also frees ~5 GB of memory:
 
 ```bash
-cd ~/cerebras-gemma-hack && sed -i 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://localhost:11434/v1|; s|^LOCAL_MODEL=.*|LOCAL_MODEL=bcluzel/LFM2.5-1.2B-Instruct:Q4_K_M|; s|^LOCAL_MAX_TOKENS=.*|LOCAL_MAX_TOKENS=64|; s|^LOCAL_TIMEOUT_SECONDS=.*|LOCAL_TIMEOUT_SECONDS=45|; /^EXTRA_LOCAL_BASE_URL=/d' .env && sudo systemctl restart ferry && sudo systemctl disable --now bonsai
+cd ~/cerebras-gemma-hack && sed -i 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://localhost:11434/v1|; s|^LOCAL_MODEL=.*|LOCAL_MODEL=LiquidAI/lfm2.5-1.2b-instruct|; s|^LOCAL_MAX_TOKENS=.*|LOCAL_MAX_TOKENS=64|; s|^LOCAL_TIMEOUT_SECONDS=.*|LOCAL_TIMEOUT_SECONDS=45|; /^EXTRA_LOCAL_BASE_URL=/d' .env && sudo systemctl restart ferry && sudo systemctl disable --now bonsai
 ```
 
 Remove the branding (plain Open WebUI): first `docker rm -f open-webui`, then
