@@ -60,16 +60,27 @@ step "Build llama-server (CUDA sm_87 for the Orin; CPU fallback if that fails)"
 cd "$FORK_DIR"
 # -j2: nvcc on the CUDA sources easily eats >1.5 GB per job; higher parallelism
 # OOMs the 8 GB board and would silently discard the GPU build.
-if command -v nvcc >/dev/null && \
-   { cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=87 && cmake --build build -j2; } > /tmp/bonsai_build.log 2>&1; then
+# Progress percentages stream to the terminal (full log: /tmp/bonsai_build.log).
+# The `|| true` keeps a no-match grep from failing the pipeline under pipefail —
+# only cmake's own exit code decides success. Expect 60-90 min on first build;
+# re-runs resume from the compiled objects.
+show_progress() { grep --line-buffered -E '\[ *[0-9]+%\]|[Ee]rror' || true; }
+build_cuda() {
+    cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=87 > /tmp/bonsai_build.log 2>&1 || return 1
+    cmake --build build -j2 2>&1 | tee -a /tmp/bonsai_build.log | show_progress
+}
+build_cpu() {
+    rm -rf build
+    cmake -B build > /tmp/bonsai_build.log 2>&1 || return 1
+    cmake --build build -j"$(nproc)" 2>&1 | tee -a /tmp/bonsai_build.log | show_progress
+}
+if command -v nvcc >/dev/null && build_cuda; then
     BUILD_KIND="CUDA (GPU)"
 else
     echo "CUDA build unavailable/failed — tail of /tmp/bonsai_build.log:"
     tail -5 /tmp/bonsai_build.log 2>/dev/null || true
     echo "retrying CPU-only build (works, but expect ~1-3 tok/s)"
-    rm -rf build
-    { cmake -B build && cmake --build build -j"$(nproc)"; } > /tmp/bonsai_build.log 2>&1 \
-        || die "CPU build failed too — see /tmp/bonsai_build.log"
+    build_cpu || die "CPU build failed too — see /tmp/bonsai_build.log"
     BUILD_KIND="CPU only (slow — fix CUDA and re-run for GPU speed)"
 fi
 [ -x "$FORK_DIR/build/bin/llama-server" ] || die "llama-server binary missing after build"
