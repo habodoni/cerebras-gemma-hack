@@ -89,13 +89,26 @@ async def list_models():
 async def chat_completions(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
-    # Ferry exposes one public model. Older clients may still send stale model
-    # ids; treat them as ferry so the user never has to pick a route.
+    # Ferry exposes "ferry" (auto-routing) plus optional passthrough extras
+    # (EXTRA_LOCAL_MODELS). Picking an extra bypasses the router entirely and
+    # talks straight to that local model. Any other/stale id is treated as ferry.
+    requested = str(body.get("model") or "")
     model = "ferry"
     stream = bool(body.get("stream", False))
     conversation = body.get("conversation_id") or request.headers.get("x-conversation-id")
 
     clients: Clients = request.app.state.clients
+
+    if requested in settings.extra_local_models:
+        if not stream:
+            content = await _safe_local_complete(
+                clients, messages, requested, backend_model=requested
+            )
+            return JSONResponse(sse.completion(requested, content))
+        return StreamingResponse(
+            _stream_local(clients, messages, requested, backend_model=requested),
+            media_type="text/event-stream",
+        )
 
     # Non-streaming calls are Open WebUI utilities (title/tag generation). Keep
     # them local & instant so they never pollute the backlog.
@@ -149,10 +162,14 @@ async def chat_completions(request: Request):
     )
 
 
-async def _stream_local(clients: Clients, messages: list[dict], model: str):
+async def _stream_local(
+    clients: Clients, messages: list[dict], model: str, backend_model: str | None = None
+):
     yield sse.chunk(model, {"role": "assistant"})
     try:
-        async for delta in clients.ollama_stream(messages, settings.local_model):
+        async for delta in clients.ollama_stream(
+            messages, backend_model or settings.local_model
+        ):
             yield sse.chunk(model, {"content": delta})
     except httpx.TimeoutException:
         yield sse.chunk(
@@ -164,6 +181,12 @@ async def _stream_local(clients: Clients, messages: list[dict], model: str):
                 )
             },
         )
+    except httpx.HTTPStatusError as exc:
+        # llama-server answers 503 while it loads the model after a (re)boot.
+        if exc.response.status_code == 503:
+            yield sse.chunk(model, {"content": _WARMING_UP})
+        else:
+            yield sse.chunk(model, {"content": f"\n\n[local model error: {exc}]"})
     except Exception as exc:  # noqa: BLE001
         yield sse.chunk(model, {"content": f"\n\n[local model error: {exc}]"})
     yield sse.chunk(model, {}, finish_reason="stop")
@@ -254,11 +277,23 @@ async def _stream_agentic(
     yield sse.DONE
 
 
-async def _safe_local_complete(clients: Clients, messages: list[dict], model: str) -> str:
+_WARMING_UP = (
+    "The local model is still warming up — it reloads for a few minutes after a "
+    "restart. Try again shortly."
+)
+
+
+async def _safe_local_complete(
+    clients: Clients, messages: list[dict], model: str, backend_model: str | None = None
+) -> str:
     try:
-        return await clients.ollama_complete(messages, settings.local_model)
+        return await clients.ollama_complete(messages, backend_model or settings.local_model)
     except httpx.TimeoutException:
         return f"[local model timed out after {settings.local_timeout_seconds:g}s]"
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 503:
+            return _WARMING_UP
+        return f"[local model unavailable: {exc}]"
     except Exception as exc:  # noqa: BLE001
         return f"[local model unavailable: {exc}]"
 

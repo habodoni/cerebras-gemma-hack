@@ -91,10 +91,29 @@ class Settings:
     ntfy_server: str = os.getenv("NTFY_SERVER", "https://ntfy.sh")
     ntfy_topic: str = os.getenv("NTFY_TOPIC", "")
 
+    # Extra passthrough models to show in the picker next to "ferry".
+    # Comma-separated ids that exist on the local backend (e.g. Ollama tags).
+    # Picking one in Open WebUI bypasses the router and talks to it directly.
+    extra_local_models: list[str] = field(
+        default_factory=lambda: [
+            m.strip()
+            for m in os.getenv("EXTRA_LOCAL_MODELS", "").split(",")
+            if m.strip()
+        ]
+    )
+    # Backend for the extra models. Defaults to OLLAMA_BASE_URL — set this only
+    # when the main local model lives elsewhere (e.g. Bonsai on llama-server at
+    # :11435) while the extras stay on real Ollama at :11434.
+    extra_local_base_url: str = os.getenv("EXTRA_LOCAL_BASE_URL", "")
+    # Token budget for the extras. Thinking models (nemotron, Bonsai) spend
+    # output tokens on hidden reasoning first — the tight LOCAL_MAX_TOKENS that
+    # keeps the tiny router-model snappy would starve them into empty answers.
+    extra_local_max_tokens: int = int(os.getenv("EXTRA_LOCAL_MAX_TOKENS", "2048"))
+
     @property
     def service_models(self) -> list[str]:
-        # Open WebUI should show one model; Ferry does all routing internally.
-        return ["ferry"]
+        # "ferry" is the product (auto-routing); extras are direct passthroughs.
+        return ["ferry", *self.extra_local_models]
 
 
 settings = Settings()

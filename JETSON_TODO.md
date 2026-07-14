@@ -1,6 +1,12 @@
 # Jetson — Catch-up TODO
 
-**Status:** the Jetson is running commit `77e0f40`. `main` is now `2655882` —
+> ## ⛔ SUPERSEDED (2026-07-14) — do not run these steps
+> Everything below (and more: the Bonsai 27B local model, the nemotron picker
+> entry, OfflineBase branding) is now handled by the self-service scripts.
+> **Use `JETSON_SSH_UPDATE.md` + `scripts/jetson_update.sh` instead.**
+> Kept only as a historical record of what the 2026-06-28 update contained.
+
+**Status (historical, 2026-06-28):** the Jetson is running commit `77e0f40`. `main` is now `2655882` —
 **4 commits behind**. It has NOT been updated with any of the recent work yet.
 
 What it's missing (all on `main`):

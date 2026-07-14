@@ -32,11 +32,29 @@ class Clients:
             base_url=settings.ollama_base_url,
             timeout=httpx.Timeout(settings.local_timeout_seconds, connect=5.0),
         )
+        # Extra passthrough models may live on a different backend than the main
+        # local model (e.g. Bonsai on llama-server :11435, extras on Ollama :11434).
+        extra_url = settings.extra_local_base_url or settings.ollama_base_url
+        self.extra_local = (
+            self.ollama
+            if extra_url == settings.ollama_base_url
+            else httpx.AsyncClient(
+                base_url=extra_url,
+                timeout=httpx.Timeout(settings.local_timeout_seconds, connect=5.0),
+            )
+        )
         self._key_idx = 0
 
     async def aclose(self) -> None:
         await self.cerebras.aclose()
         await self.ollama.aclose()
+        if self.extra_local is not self.ollama:
+            await self.extra_local.aclose()
+
+    def _local_client(self, model: str) -> httpx.AsyncClient:
+        if model in settings.extra_local_models:
+            return self.extra_local
+        return self.ollama
 
     @property
     def has_cerebras_key(self) -> bool:
@@ -53,7 +71,7 @@ class Clients:
         self, messages: list[dict], model: str
     ) -> AsyncIterator[str]:
         payload = _local_payload(messages, model, stream=True)
-        async with self.ollama.stream(
+        async with self._local_client(model).stream(
             "POST", "/chat/completions", json=payload
         ) as resp:
             resp.raise_for_status()
@@ -62,7 +80,7 @@ class Clients:
 
     async def ollama_complete(self, messages: list[dict], model: str) -> str:
         payload = _local_payload(messages, model, stream=False)
-        resp = await self.ollama.post("/chat/completions", json=payload)
+        resp = await self._local_client(model).post("/chat/completions", json=payload)
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"].get("content", "")
@@ -394,8 +412,15 @@ def _local_payload(messages: list[dict], model: str, stream: bool) -> dict:
         "stream": stream,
         "temperature": settings.local_temperature,
     }
-    if settings.local_max_tokens > 0:
-        payload["max_tokens"] = settings.local_max_tokens
+    # Passthrough extras get a bigger budget: thinking models burn output tokens
+    # on hidden reasoning before the visible answer.
+    cap = (
+        settings.extra_local_max_tokens
+        if model in settings.extra_local_models
+        else settings.local_max_tokens
+    )
+    if cap > 0:
+        payload["max_tokens"] = cap
     return payload
 
 

@@ -17,8 +17,10 @@ class SingleModelRoutingTests(unittest.IsolatedAsyncioTestCase):
     def messages(self, prompt):
         return [{"role": "user", "content": prompt}]
 
-    def test_openai_surface_exposes_only_ferry(self):
-        self.assertEqual(settings.service_models, ["ferry"])
+    def test_openai_surface_exposes_ferry_first(self):
+        # "ferry" (auto-routing) always leads; optional passthrough extras follow.
+        self.assertEqual(settings.service_models[0], "ferry")
+        self.assertEqual(settings.service_models[1:], settings.extra_local_models)
 
     async def test_short_prompt_routes_local(self):
         route, reason = await router.decide(
