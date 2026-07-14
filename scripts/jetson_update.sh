@@ -52,6 +52,7 @@ ensure_env NOTIFY_MODE ntfy
 ensure_env NTFY_TOPIC ferry-ethan-7q3v9k2x
 ensure_env PUBLIC_BASE_URL http://192.168.1.62:8080
 ensure_env EXTRA_LOCAL_MODELS nemotron-3-nano:4b
+ensure_env EXPOSE_ROUTER_MODEL false
 
 # Raise CEREBRAS_MAX_TOKENS ONLY off the known legacy defaults — a value you
 # chose yourself (anything else) is left alone.

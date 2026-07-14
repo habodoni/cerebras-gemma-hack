@@ -17,10 +17,13 @@ class SingleModelRoutingTests(unittest.IsolatedAsyncioTestCase):
     def messages(self, prompt):
         return [{"role": "user", "content": prompt}]
 
-    def test_openai_surface_exposes_ferry_first(self):
-        # "ferry" (auto-routing) leads; the local model and passthrough extras
-        # follow as direct picker entries (deduplicated).
-        expected = ["ferry", settings.local_model, *settings.extra_local_models]
+    def test_openai_surface_matches_configuration(self):
+        # "ferry" (auto-routing) leads when exposed; the local model and
+        # passthrough extras follow as direct picker entries (deduplicated).
+        expected = (["ferry"] if settings.expose_router_model else []) + [
+            settings.local_model,
+            *settings.extra_local_models,
+        ]
         self.assertEqual(settings.service_models, list(dict.fromkeys(expected)))
 
     async def test_short_prompt_routes_local(self):

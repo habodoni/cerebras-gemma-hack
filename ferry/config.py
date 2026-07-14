@@ -110,11 +110,20 @@ class Settings:
     # keeps the tiny router-model snappy would starve them into empty answers.
     extra_local_max_tokens: int = int(os.getenv("EXTRA_LOCAL_MAX_TOKENS", "2048"))
 
+    # Whether the "ferry" auto-routing meta-model appears in the picker.
+    # When hidden, the picker shows only the real models (local + extras);
+    # requests that still name "ferry" (or any unknown id) keep auto-routing.
+    expose_router_model: bool = field(
+        default_factory=lambda: os.getenv("EXPOSE_ROUTER_MODEL", "true")
+        .strip()
+        .lower()
+        not in ("0", "false", "no", "off")
+    )
+
     @property
     def service_models(self) -> list[str]:
-        # "ferry" is the product (auto-routing). The local model and the extras
-        # also appear as direct passthrough entries in the picker.
-        models = ["ferry", self.local_model, *self.extra_local_models]
+        models = ["ferry"] if self.expose_router_model else []
+        models += [self.local_model, *self.extra_local_models]
         return list(dict.fromkeys(models))
 
 
