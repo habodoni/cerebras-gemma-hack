@@ -9,7 +9,9 @@ What this round of updates brings to the Jetson:
 2. **Bonsai 27B (1-bit)** as the new local model — announced by PrismML today
    (2026-07-14), a 27B-class model in 3.8 GB that fits the Orin Nano. It
    replaces Liquid as the default; Liquid stays installed as a fallback.
-3. **nemotron-3-nano:4b** added to the model picker (next to `ferry`).
+3. **`LiquidAI/lfm2.5-1.2b-instruct`** (official tag) in the picker as the
+   fallback. (nemotron-3-nano:4b fits only when Bonsai is NOT the resident
+   local model — see the memory notes in §5.)
 4. **OfflineBase branding** on the chat UI ("OfflineBase (Open WebUI)").
 
 ---
@@ -104,10 +106,12 @@ Expect `"local_model":"1-bit-Bonsai-27B"` and `"cloud_model":"gemma-4-31b"`.
 Then from any device on the network, open `http://192.168.1.62:3000`:
 
 - Header reads **OfflineBase (Open WebUI)**.
-- The model picker shows **`1-bit-Bonsai-27B`** (default, listed first),
-  **`nemotron-3-nano:4b`**, and **`LiquidAI/lfm2.5-1.2b-instruct`** — no
-  `ferry` entry. If new chats don't preselect Bonsai, set it once in
-  **Admin Panel → Settings → Interface → Default Model**.
+- The model picker shows **`1-bit-Bonsai-27B`** (default, listed first) and
+  **`LiquidAI/lfm2.5-1.2b-instruct`** — no `ferry` entry. If new chats don't
+  preselect Bonsai, set it once in **Admin Panel → Settings → Interface →
+  Default Model**. (nemotron-3-nano:4b is not offered beside Bonsai: it needs
+  ~3.4 GB to load and the 8 GB board can't hold both — picking it would just
+  return out-of-memory. It comes back if you revert to Liquid as the default.)
 - A quick prompt on `ferry` answers from Bonsai (first answer includes model
   warm-up; after that expect ~5-12 tok/s — a 27B on an 8 GB board is a
   capability statement, not a speed one).
@@ -137,9 +141,11 @@ run the `docker run` command from `scripts/jetson_branding.sh` without the
 
 ## 5. Memory notes (8 GB board, be aware)
 
-Resident when Bonsai is the local model: Bonsai ~5.3 GB (weights + cache) +
-Open WebUI container + OS. That leaves little headroom — nemotron (2.8 GB)
-loads into Ollama **on demand** and unloads after idle, but using Bonsai and
-nemotron at the same moment can push into swap. Fine for a demo; don't
-hammer both at once. If the board feels tight: `sudo systemctl disable --now
-bonsai` and revert (§4).
+Resident when Bonsai is the local model: Bonsai ~5 GB (weights + cache) +
+Open WebUI container + OS ≈ the whole board. That is why nemotron (~3.4 GB to
+load) is not in the picker beside Bonsai — it returns out-of-memory. Liquid
+(~1.2 GB loaded) is the one extra that fits, loading on demand and unloading
+after a minute idle. If even Liquid feels sluggish, it's swapping — fine
+briefly, not for sustained use. If the board feels tight overall:
+`sudo systemctl disable --now bonsai` and revert (§4); Liquid + nemotron
+coexist happily without Bonsai.

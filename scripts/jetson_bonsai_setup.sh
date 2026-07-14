@@ -104,7 +104,7 @@ After=network.target
 [Service]
 User=$USER
 Environment=GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
-ExecStart=$FORK_DIR/build/bin/llama-server -m $MODEL_DIR/$MODEL_FILE --host 127.0.0.1 --port $PORT -c 8192 --parallel 2 --reasoning-budget 0 --temp 0.7 --top-p 0.95 --top-k 20
+ExecStart=$FORK_DIR/build/bin/llama-server -m $MODEL_DIR/$MODEL_FILE --host 127.0.0.1 --port $PORT -c 4096 --parallel 2 --reasoning-budget 0 --temp 0.7 --top-p 0.95 --top-k 20
 Restart=always
 RestartSec=3
 
@@ -124,17 +124,18 @@ for _ in $(seq 1 60); do
 done
 [ "$health" = "200" ] || die "bonsai.service not healthy — check: journalctl -u bonsai -n 50"
 
-step "Pull the picker extras into Ollama (nemotron ~2.8 GB, official Liquid ~700 MB)"
+step "Pull the Liquid fallback into Ollama (official tag, ~700 MB)"
+# NOTE: nemotron-3-nano:4b is deliberately NOT in the picker beside Bonsai —
+# it needs ~3.4 GB to load and the 8 GB board cannot hold it while Bonsai
+# (~5 GB) is resident: picking it just returns out-of-memory. Liquid (~1.2 GB
+# loaded) is the one extra that fits.
 if command -v ollama >/dev/null; then
-    ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b' \
-        || ollama pull nemotron-3-nano:4b \
-        || echo "WARN: nemotron pull failed; retry later with: ollama pull nemotron-3-nano:4b"
     ollama list 2>/dev/null | grep -qi '^LiquidAI/lfm2.5-1.2b-instruct' \
         || ollama pull LiquidAI/lfm2.5-1.2b-instruct \
         || echo "WARN: Liquid pull failed; retry later with: ollama pull LiquidAI/lfm2.5-1.2b-instruct"
 fi
 
-step "Repoint Ferry at Bonsai (default; Liquid + nemotron stay in the picker)"
+step "Repoint Ferry at Bonsai (default; Liquid stays in the picker as fallback)"
 cd "$REPO_DIR"
 [ -s .env ] && [ -n "$(tail -c1 .env)" ] && echo >> .env
 set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
@@ -142,7 +143,7 @@ set_env OLLAMA_BASE_URL "http://127.0.0.1:$PORT/v1"
 set_env LOCAL_MODEL "1-bit-Bonsai-27B"
 set_env LOCAL_MAX_TOKENS 400
 set_env LOCAL_TIMEOUT_SECONDS 180
-set_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct"
+set_env EXTRA_LOCAL_MODELS "LiquidAI/lfm2.5-1.2b-instruct"
 set_env EXTRA_LOCAL_BASE_URL "http://127.0.0.1:11434/v1"
 set_env EXPOSE_ROUTER_MODEL false
 sudo systemctl restart ferry
