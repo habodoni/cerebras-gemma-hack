@@ -91,16 +91,26 @@ Jetson). The real choices are ternary (~7.2 GB — does not fit an 8 GB board
 once the KV cache and the rest of the stack are counted) and **1-bit (3.8 GB —
 the phone-class build, which is what we install)**.
 
-### Step 3 — one-time: OfflineBase branding
+### Step 3 — OfflineBase branding + open (no-login) appliance mode
+
+First time (or whenever the login screen locks you out / password forgotten):
+
+```bash
+cd ~/cerebras-gemma-hack && RESET_OPENWEBUI=1 ./scripts/jetson_branding.sh
+```
+
+The reset wipes Open WebUI's accounts and chat history (required once —
+Open WebUI refuses to disable login while any account exists), then recreates
+the container fully pre-configured: **no login screen**, header
+**"OfflineBase (Open WebUI)"**, the Ferry connection already wired, Bonsai
+preselected for new chats, and no raw-Ollama duplicates in the picker.
+Anyone on the hub's network can chat — that's the appliance UX.
+
+Future re-runs (e.g. after editing the script) don't need the reset:
 
 ```bash
 cd ~/cerebras-gemma-hack && ./scripts/jetson_branding.sh
 ```
-
-Recreates the Open WebUI container with `WEBUI_NAME=OfflineBase`. The UI then
-shows **"OfflineBase (Open WebUI)"** in the header and tab (the suffix is added
-by Open WebUI itself and can't be removed via this setting). All data — users,
-chats, the Ferry connection — survives; it lives in the `open-webui` volume.
 
 ## 3. Verify
 
@@ -111,13 +121,15 @@ curl -s http://localhost:8080/api/status; echo
 Expect `"local_model":"1-bit-Bonsai-27B"` and `"cloud_model":"gemma-4-31b"`.
 Then from any device on the network, open `http://192.168.1.62:3000`:
 
+- It opens **straight into the chat — no login screen**.
 - Header reads **OfflineBase (Open WebUI)**.
-- The model picker shows **`1-bit-Bonsai-27B`** (default, listed first) and
-  **`LiquidAI/lfm2.5-1.2b-instruct`** — no `ferry` entry. If new chats don't
-  preselect Bonsai, set it once in **Admin Panel → Settings → Interface →
-  Default Model**. (nemotron-3-nano:4b is not offered beside Bonsai: it needs
-  ~3.4 GB to load and the 8 GB board can't hold both — picking it would just
-  return out-of-memory. It comes back if you revert to Liquid as the default.)
+- The model picker shows **`1-bit-Bonsai-27B`** (preselected) and
+  **`LiquidAI/lfm2.5-1.2b-instruct`** — no `ferry` entry. If you kept the old
+  volume (no reset) and Bonsai isn't preselected, set it once in **Admin
+  Panel → Settings → Interface → Default Model**. (nemotron-3-nano:4b is not
+  offered beside Bonsai: it needs ~3.4 GB to load and the 8 GB board can't
+  hold both — picking it would just return out-of-memory. It comes back if
+  you revert to Liquid as the default.)
 - A quick prompt on `ferry` answers from Bonsai (first answer includes model
   warm-up; after that expect ~5-12 tok/s — a 27B on an 8 GB board is a
   capability statement, not a speed one).
