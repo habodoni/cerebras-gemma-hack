@@ -142,6 +142,10 @@ UNIT_FILE=/etc/systemd/system/bonsai.service
 #   -fa on --min-p 0       PrismML's own serving settings for Bonsai.
 #   --parallel 2           Ferry's quick router probes don't queue behind a
 #       long streaming answer (hybrid-attention KV is small; 2 slots are cheap).
+#   -c 8192                the context is SPLIT across the 2 slots (4096 each),
+#       and llama-server hard-errors when a prompt alone fills a slot. Ferry's
+#       compacted history can reach ~3k tokens, so 2048/slot (-c 4096) would
+#       error on normal chats. KV at 8192 costs only ~0.3 GB extra on Bonsai.
 #   No GGML_CUDA_ENABLE_UNIFIED_MEMORY: on Tegra, cudaMallocManaged allocates
 #       through nvmap all the same — it dodges nothing and is slower.
 render_unit() {  # $1 = extra llama-server flags (used by the fallback ladder)
@@ -155,7 +159,7 @@ StartLimitIntervalSec=0
 [Service]
 User=$USER
 ExecStartPre=+/bin/sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
-ExecStart=$FORK_DIR/build/bin/llama-server -m $MODEL_DIR/$MODEL_FILE --host 127.0.0.1 --port $PORT -c 4096 --parallel 2 --no-mmap --direct-io -fa on --fit-target 2048 --reasoning-budget 0 --temp 0.7 --top-p 0.95 --top-k 20 --min-p 0${EXTRA_FLAGS:+ $EXTRA_FLAGS}
+ExecStart=$FORK_DIR/build/bin/llama-server -m $MODEL_DIR/$MODEL_FILE --host 127.0.0.1 --port $PORT -c 8192 --parallel 2 --no-mmap --direct-io -fa on --fit-target 2048 --reasoning-budget 0 --temp 0.7 --top-p 0.95 --top-k 20 --min-p 0${EXTRA_FLAGS:+ $EXTRA_FLAGS}
 Restart=always
 RestartSec=20
 
@@ -221,6 +225,12 @@ set_env OLLAMA_BASE_URL "http://127.0.0.1:$PORT/v1"
 set_env LOCAL_MODEL "1-bit-Bonsai-27B"
 set_env LOCAL_MAX_TOKENS 400
 set_env LOCAL_TIMEOUT_SECONDS 180
+# PrismML's recommended sampling — Ferry's request temperature overrides the
+# server's --temp, so it must be set here too (0.2 makes 1-bit models loop).
+set_env LOCAL_TEMPERATURE 0.7
+# Keep the compacted prompt comfortably inside the 4096-token slot (system +
+# 4 recent messages, each trimmed to this many chars).
+set_env LOCAL_CONTEXT_CHARS 1600
 set_env EXTRA_LOCAL_MODELS "LiquidAI/lfm2.5-1.2b-instruct"
 set_env EXTRA_LOCAL_BASE_URL "http://127.0.0.1:11434/v1"
 set_env EXPOSE_ROUTER_MODEL false
@@ -246,6 +256,8 @@ Revert to Liquid as the default at any time:
   set_env LOCAL_MODEL LiquidAI/lfm2.5-1.2b-instruct
   set_env LOCAL_MAX_TOKENS 64
   set_env LOCAL_TIMEOUT_SECONDS 45
+  set_env LOCAL_TEMPERATURE 0.2
+  set_env LOCAL_CONTEXT_CHARS 2400
   set_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct"
   ollama pull nemotron-3-nano:4b               # fits again once Bonsai is gone
   sed -i '/^EXTRA_LOCAL_BASE_URL=/d' .env      # extras follow OLLAMA_BASE_URL again
