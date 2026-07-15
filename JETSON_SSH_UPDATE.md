@@ -52,7 +52,7 @@ cd ~/cerebras-gemma-hack && git pull && ./scripts/jetson_update.sh
 
 Safe to run any time, as often as you like. It pulls the latest code, installs
 deps only if they changed, fills in any missing `.env` values (without touching
-ones you customized), pulls `nemotron-3-nano:4b` into Ollama, restarts Ferry,
+ones you customized), pulls the Liquid fallback into Ollama, restarts Ferry,
 and health-checks it. **This is the one command for every future update too.**
 
 ### Step 2 — one-time: install Bonsai 27B as the local model
@@ -68,8 +68,14 @@ What it sets up and why:
   llama.cpp fork — stock Ollama cannot load this model.** So Bonsai runs as its
   own service (`bonsai.service`, llama-server on port 11435) and Ferry's `.env`
   is repointed at it. Zero Ferry code changes; it's all config.
-- Ollama keeps running on 11434, serving the picker extras (nemotron) and
-  holding Liquid as the fallback.
+- Ollama keeps running on 11434, holding Liquid as the picker fallback.
+- The Jetson kernel (L4T r36.4.x) refuses big GPU allocations whenever the file
+  cache is full — the service is built around that: it drops caches at start
+  and loads with `--no-mmap --direct-io` so the model file never fills the
+  cache first. If a full-GPU load still fails, the script automatically
+  retries with part of the model on the CPU and prints a loud **DEGRADED
+  MODE** notice (slower but working; re-run the script later to try full GPU
+  again).
 - Thinking mode is disabled (`--reasoning-budget 0`) so answers arrive in
   seconds. Bonsai supports full reasoning, but at this board's ~5-12 tok/s that
   means minutes per answer. If you ever want quality-over-speed: edit
@@ -115,8 +121,8 @@ Then from any device on the network, open `http://192.168.1.62:3000`:
 - A quick prompt on `ferry` answers from Bonsai (first answer includes model
   warm-up; after that expect ~5-12 tok/s — a 27B on an 8 GB board is a
   capability statement, not a speed one).
-- Picking `nemotron-3-nano:4b` bypasses Ferry's router entirely and talks to
-  that model directly on Ollama.
+- Picking `LiquidAI/lfm2.5-1.2b-instruct` bypasses Ferry's router entirely and
+  talks to that model directly on Ollama.
 
 Service checks if something looks off:
 
@@ -126,14 +132,25 @@ journalctl -u bonsai -n 30
 journalctl -u ferry -n 30
 ```
 
+If the bonsai journal shows `NvMapMemAllocInternalTagged ... error 12` /
+`cudaMalloc failed: out of memory` while `free -h` shows gigabytes available:
+that is the L4T r36.4.x kernel refusing to reclaim file cache for GPU
+allocations. The service's flags already mitigate it; a re-run of
+`./scripts/jetson_bonsai_setup.sh` re-applies them and walks the fallback
+ladder. NVIDIA forum threads report newer JetPack releases relax the policy
+again — an OS upgrade is optional, not required.
+
 ## 4. Revert / undo
 
 Back to Liquid (official `LiquidAI/lfm2.5-1.2b-instruct` tag) as the default —
 also frees ~5 GB of memory:
 
 ```bash
-cd ~/cerebras-gemma-hack && sed -i 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://localhost:11434/v1|; s|^LOCAL_MODEL=.*|LOCAL_MODEL=LiquidAI/lfm2.5-1.2b-instruct|; s|^LOCAL_MAX_TOKENS=.*|LOCAL_MAX_TOKENS=64|; s|^LOCAL_TIMEOUT_SECONDS=.*|LOCAL_TIMEOUT_SECONDS=45|; /^EXTRA_LOCAL_BASE_URL=/d' .env && sudo systemctl restart ferry && sudo systemctl disable --now bonsai
+cd ~/cerebras-gemma-hack && sed -i 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://localhost:11434/v1|; s|^LOCAL_MODEL=.*|LOCAL_MODEL=LiquidAI/lfm2.5-1.2b-instruct|; s|^LOCAL_MAX_TOKENS=.*|LOCAL_MAX_TOKENS=64|; s|^LOCAL_TIMEOUT_SECONDS=.*|LOCAL_TIMEOUT_SECONDS=45|; s|^EXTRA_LOCAL_MODELS=.*|EXTRA_LOCAL_MODELS=nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct|; /^EXTRA_LOCAL_BASE_URL=/d' .env && sudo systemctl restart ferry && sudo systemctl disable --now bonsai
 ```
+
+Then, if you removed nemotron earlier, bring it back (it fits once Bonsai is
+gone): `ollama pull nemotron-3-nano:4b`
 
 Remove the branding (plain Open WebUI): first `docker rm -f open-webui`, then
 run the `docker run` command from `scripts/jetson_branding.sh` without the

@@ -11,7 +11,7 @@
 #   3. one-time .env catch-up values (never stomps values you customized;
 #      one exception: a legacy-default CEREBRAS_MAX_TOKENS is raised once,
 #      because small budgets return empty answers when reasoning is on)
-#   4. pulls the extra picker model (nemotron) into Ollama if missing
+#   4. pulls the Liquid fallback model into Ollama if missing
 #   5. restarts ferry + health check
 set -uo pipefail
 
@@ -51,7 +51,9 @@ ensure_env CEREBRAS_THINK_EFFORT medium
 ensure_env NOTIFY_MODE ntfy
 ensure_env NTFY_TOPIC ferry-ethan-7q3v9k2x
 ensure_env PUBLIC_BASE_URL http://192.168.1.62:8080
-ensure_env EXTRA_LOCAL_MODELS "nemotron-3-nano:4b,LiquidAI/lfm2.5-1.2b-instruct"
+# Liquid only: nemotron-3-nano:4b needs ~3.4 GB to load and cannot fit beside
+# the resident Bonsai on this 8 GB board (it just returns out-of-memory).
+ensure_env EXTRA_LOCAL_MODELS "LiquidAI/lfm2.5-1.2b-instruct"
 ensure_env EXPOSE_ROUTER_MODEL false
 
 # Raise CEREBRAS_MAX_TOKENS ONLY off the known legacy defaults — a value you
@@ -66,10 +68,6 @@ fi
 
 # --- picker models -----------------------------------------------------------
 if command -v ollama >/dev/null; then
-    if ! ollama list 2>/dev/null | grep -q '^nemotron-3-nano:4b'; then
-        echo "pulling nemotron-3-nano:4b (~2.8 GB) ..."
-        ollama pull nemotron-3-nano:4b || echo "WARN: nemotron pull failed; the picker entry will error until it is pulled"
-    fi
     if ! ollama list 2>/dev/null | grep -qi '^LiquidAI/lfm2.5-1.2b-instruct'; then
         echo "pulling LiquidAI/lfm2.5-1.2b-instruct (~700 MB, official tag) ..."
         ollama pull LiquidAI/lfm2.5-1.2b-instruct || echo "WARN: Liquid pull failed; the picker entry will error until it is pulled"
