@@ -115,6 +115,11 @@ After=network.target
 [Service]
 User=$USER
 Environment=GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+# Jetson's GPU allocator (nvmap) can't evict page cache, so the ~3.4 GiB
+# cudaMalloc fails with ENOMEM whenever the GGUF (or anything big) sits in the
+# file cache — drop it just before start. '+' = run as root; the server itself
+# stays unprivileged.
+ExecStartPre=+/bin/sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
 ExecStart=$FORK_DIR/build/bin/llama-server -m $MODEL_DIR/$MODEL_FILE --host 127.0.0.1 --port $PORT -c 4096 --parallel 2 --reasoning-budget 0 --temp 0.7 --top-p 0.95 --top-k 20
 Restart=always
 RestartSec=3
