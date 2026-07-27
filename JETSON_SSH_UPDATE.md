@@ -101,10 +101,14 @@ cd ~/cerebras-gemma-hack && RESET_OPENWEBUI=1 ./scripts/jetson_branding.sh
 
 The reset wipes Open WebUI's accounts and chat history (required once —
 Open WebUI refuses to disable login while any account exists), then recreates
-the container fully pre-configured: **no login screen**, header
-**"OfflineBase (Open WebUI)"**, the Ferry connection already wired, Bonsai
-preselected for new chats, and no raw-Ollama duplicates in the picker.
-Anyone on the hub's network can chat — that's the appliance UX.
+the container fully pre-configured and looking like the Base Drive product:
+**no login screen**, the UI reads **"Offline Base"** (no "(Open WebUI)"
+suffix) with the Offline Base favicon/logo/splash and navy/teal palette, the
+Ferry connection already wired, Bonsai preselected for new chats, and no
+raw-Ollama duplicates in the picker. Anyone on the hub's network can chat —
+that's the appliance UX. (De-branding is lawful here under Open WebUI License
+Clause 4(i): a private hub with ≤50 users. Don't sell access to it branded
+this way — see the license note in `scripts/jetson_branding.sh`.)
 
 Future re-runs (e.g. after editing the script) don't need the reset:
 
@@ -122,7 +126,8 @@ Expect `"local_model":"1-bit-Bonsai-27B"` and `"cloud_model":"gemma-4-31b"`.
 Then from any device on the network, open `http://192.168.1.62:3000`:
 
 - It opens **straight into the chat — no login screen**.
-- Header reads **OfflineBase (Open WebUI)**.
+- The name everywhere is **Offline Base** (tab, header, splash) with the
+  Offline Base mark — hard-refresh if you still see old Open WebUI icons.
 - The model picker shows **`1-bit-Bonsai-27B`** (preselected) and
   **`LiquidAI/lfm2.5-1.2b-instruct`** — no `ferry` entry. If you kept the old
   volume (no reset) and Bonsai isn't preselected, set it once in **Admin
