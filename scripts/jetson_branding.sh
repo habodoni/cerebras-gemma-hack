@@ -128,17 +128,20 @@ MOUNTS+=(-v "$STAGE/static/favicon.png:/app/build/favicon.png")
 
 # On a FRESH volume these envs fully configure the UI at first boot:
 #   OPENAI_API_BASE_URL  -> Ferry on the host (key is a dummy; Ferry ignores auth)
-#   ENABLE_OLLAMA_API=false -> picker shows ONLY Ferry's models: 1-bit-Bonsai-27B
-#                              and LiquidAI/lfm2.5-1.2b-instruct, nothing else
-#   DEFAULT_MODELS       -> new chats preselect Bonsai
+#   ENABLE_OLLAMA_API=false -> picker shows ONLY Ferry's models (Bonsai +
+#                              LiquidAI/lfm2.5-1.2b-instruct, nothing else)
+#   DEFAULT_MODELS       -> new chats preselect Bonsai; must match Ferry's
+#                           LOCAL_MODEL id, read live from the .env
 # (On a kept volume, DB values from the old setup win over these seeds.)
+BONSAI_ID=$(grep -m1 '^LOCAL_MODEL=' "$REPO_DIR/.env" 2>/dev/null | cut -d= -f2-)
+BONSAI_ID=${BONSAI_ID:-MobiusDevelopment/Bonsai-27B-Q1_0-gguf}
 docker run -d -p 3000:8080 \
     --add-host=host.docker.internal:host-gateway \
     -v open-webui:/app/backend/data \
     "${MOUNTS[@]}" \
     -e WEBUI_NAME="$PRODUCT" \
     -e WEBUI_AUTH=False \
-    -e DEFAULT_MODELS="1-bit-Bonsai-27B" \
+    -e DEFAULT_MODELS="$BONSAI_ID" \
     -e OPENAI_API_BASE_URL="http://host.docker.internal:8080/v1" \
     -e OPENAI_API_KEY="ferry-local" \
     -e ENABLE_OLLAMA_API=false \

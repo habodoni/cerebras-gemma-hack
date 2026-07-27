@@ -57,6 +57,21 @@ and health-checks it. **This is the one command for every future update too.**
 
 ### Step 2 — one-time: install Bonsai 27B as the local model
 
+**Current route (2026-07-27, matches Base Drive): Bonsai on plain Ollama.**
+
+```bash
+cd ~/cerebras-gemma-hack && ./scripts/jetson_bonsai_via_ollama.sh
+```
+
+Upgrades Ollama if needed, pulls `MobiusDevelopment/Bonsai-27B-Q1_0-gguf`
+(the checksum-verified republish of PrismML's own 1-bit file), proves it
+generates on this board before touching Ferry, then repoints Ferry at it.
+Picker: that Bonsai tag (default) + `LiquidAI/lfm2.5-1.2b-instruct`. Only
+one model fits in memory at a time — picking the other swaps them (~1–2 min
+to swap back to Bonsai); the last-used model stays warm indefinitely.
+
+<details><summary>Legacy route: PrismML llama-server sidecar (kept as fallback)</summary>
+
 ```bash
 cd ~/cerebras-gemma-hack && ./scripts/jetson_bonsai_setup.sh
 ```
@@ -90,6 +105,8 @@ accelerator that must run *alongside* the main model, not a chat model itself
 Jetson). The real choices are ternary (~7.2 GB — does not fit an 8 GB board
 once the KV cache and the rest of the stack are counted) and **1-bit (3.8 GB —
 the phone-class build, which is what we install)**.
+
+</details>
 
 ### Step 3 — OfflineBase branding + open (no-login) appliance mode
 
