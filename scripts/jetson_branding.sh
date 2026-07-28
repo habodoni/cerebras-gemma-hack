@@ -134,7 +134,7 @@ MOUNTS+=(-v "$STAGE/static/favicon.png:/app/build/favicon.png")
 #                           LOCAL_MODEL id, read live from the .env
 # (On a kept volume, DB values from the old setup win over these seeds.)
 BONSAI_ID=$(grep -m1 '^LOCAL_MODEL=' "$REPO_DIR/.env" 2>/dev/null | cut -d= -f2-)
-BONSAI_ID=${BONSAI_ID:-MobiusDevelopment/Bonsai-27B-Q1_0-gguf}
+BONSAI_ID=${BONSAI_ID:-Bonsai-27B}
 docker run -d -p 3000:8080 \
     --add-host=host.docker.internal:host-gateway \
     -v open-webui:/app/backend/data \
